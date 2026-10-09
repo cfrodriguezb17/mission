@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/paises/', include('economics.urls')),
     path('api/paises/', include('countries.urls')),
     path('api/riesgo/', include('risk.urls')),
+    path('api/alertas/', include('alerts.urls')),
 ]

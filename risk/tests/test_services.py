@@ -91,7 +91,7 @@ class RiskServiceTests(TestCase):
         result = sincronizar_y_recalcular(paises=["CO", "BR"])
         self.assertEqual(result["riesgos"]["calculados"][0]["pais"], "CO")
         self.assertFalse(result["recalculo_pendiente"])
-        self.assertTrue(result["alertas_pendientes"])
+        self.assertFalse(result["alertas_pendientes"])
         self.assertEqual(IndiceRiesgo.objects.count(), 1)
 
     @patch("backend.workflows.actualizar_tipos_cambio")

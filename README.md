@@ -1,5 +1,23 @@
 # DataPulse Latam — backend
 
+## alerts implementado — 8 de octubre de 2026
+
+El quinto módulo principal incorpora Alerta y LecturaAlerta, completando los
+tres ajustes principales de normalización. Incluye alertas automáticas,
+visibilidad global/privada, lecturas independientes por usuario, filtros,
+paginación y resumen. Sync y recálculo administrativo generan alertas mediante
+workflows y reportan fallos por etapa; reintentos no duplican eventos.
+[API, reglas, idempotencia y comandos de alerts](alerts/README.md).
+Verificación: **149 pruebas correctas** con el historial original y **148**
+en modo `--fresh`, sobre PostgreSQL temporal; cuatro pruebas por HTTP real y
+tres de concurrencia. Ambas bases temporales se eliminaron al pasar.
+Migración `alerts.0001_initial` aplicada a la base local conservando usuarios,
+países, monedas, indicadores, cotizaciones y los 10 índices de riesgo. Los
+índices actuales no cumplen condiciones de alerta: la generación inicial y su
+repetición crearon cero alertas, sin insertar eventos de demostración ficticios.
+WebSockets son una extensión opcional posterior. Siguiente módulo: portfolios.
+Las notas inferiores registran el estado de las entregas anteriores.
+
 ## risk implementado — 8 de octubre de 2026
 
 El backend incluye `IndiceRiesgo`, cálculo IRPC con evidencia histórica,

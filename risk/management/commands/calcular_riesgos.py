@@ -2,7 +2,7 @@ import json
 
 from django.core.management.base import BaseCommand, CommandError
 
-from risk.services import recalcular_riesgos
+from backend.workflows import recalcular_con_alertas as recalcular_riesgos
 
 
 class Command(BaseCommand):
@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         codes = [code.upper() for code in options["paises"]] if options["paises"] else None
-        result = recalcular_riesgos(codes)
+        result = recalcular_riesgos(paises=codes)
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"]:
+        if result["errores"] or result.get("alertas", {}).get("errores"):
             raise CommandError("Recálculo parcial: consulte los países con errores.")

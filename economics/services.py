@@ -37,7 +37,7 @@ def decimal_campo(value, places, max_digits=24):
 
 def _resultado():
     return {"creados": 0, "actualizados": 0, "sin_cambios": 0, "manuales_conservados": 0,
-            "faltantes": [], "paises_procesados": [], "errores": []}
+            "faltantes": [], "paises_procesados": [], "errores": [], "datos_nuevos": []}
 
 
 def _log(event, result):
@@ -55,6 +55,7 @@ def guardar_indicadores(pais, observations, catalog, start, end):
     Pais.objects.select_for_update().get(pk=pais.pk)
     counts = {"creados": 0, "actualizados": 0, "sin_cambios": 0, "manuales_conservados": 0}
     present = set()
+    events = []
     for row in observations:
         tipo = catalog[row["codigo_world_bank"]]
         key = (tipo.codigo, row["anio"])
@@ -77,10 +78,14 @@ def guardar_indicadores(pais, observations, catalog, start, end):
         observation.es_simulado = False
         observation.full_clean()
         observation.save()
+        events.append({"pais": pais.pk, "tipo": tipo.codigo, "id": observation.pk, "anio": observation.anio,
+                       "valor": str(observation.valor), "fuente": observation.fuente,
+                       "fecha_actualizacion": observation.fecha_actualizacion.isoformat()})
         counts["actualizados" if existing else "creados"] += 1
     counts["faltantes"] = [{"pais": pais.pk, "tipo": code, "anio": year}
                             for code, _, _, _ in INDICATORS for year in range(start, end + 1)
                             if (code, year) not in present]
+    counts["datos_nuevos"] = events
     return counts
 
 
@@ -111,6 +116,7 @@ def sincronizar_indicadores(*, paises=None, anio_inicio=None, anio_fin=None, pre
             for key in ("creados", "actualizados", "sin_cambios", "manuales_conservados"):
                 result[key] += counts[key]
             result["faltantes"].extend(counts["faltantes"])
+            result["datos_nuevos"].extend(counts["datos_nuevos"])
             result["paises_procesados"].append(code)
         except (ProviderError, ValidationError, IntegrityError) as exc:
             _error(result, code, str(exc))
@@ -121,7 +127,7 @@ def sincronizar_indicadores(*, paises=None, anio_inicio=None, anio_fin=None, pre
 
 
 @transaction.atomic
-def guardar_cotizacion(moneda, fecha, tasa):
+def guardar_cotizacion(moneda, fecha, tasa, eventos=None):
     Moneda.objects.select_for_update().get(pk=moneda.pk)
     value = decimal_campo(tasa, 12)
     if value <= 0:
@@ -137,6 +143,10 @@ def guardar_cotizacion(moneda, fecha, tasa):
     quote.es_simulado = False
     quote.full_clean()
     quote.save()
+    if eventos is not None:
+        eventos.append({"tipo": "TIPO_CAMBIO", "id": quote.pk, "moneda_origen": moneda.pk,
+                       "moneda_destino": "USD", "tasa": str(quote.tasa), "fecha": fecha.isoformat(),
+                       "fuente": quote.fuente})
     return "actualizados" if existing else "creados"
 
 
@@ -159,6 +169,7 @@ def actualizar_tipos_cambio(*, client=None):
     # Un solo llamado HTTP y una cotización por moneda aunque varios países la usen.
     countries = list(Pais.objects.filter(pk__in=COUNTRY_CODES, activo=True).select_related("moneda"))
     processed = set()
+    currency_events = {}
     for pais in countries:
         if pais.moneda_id == "USD":
             result["paises_procesados"].append(pais.pk)
@@ -167,9 +178,12 @@ def actualizar_tipos_cambio(*, client=None):
             if pais.moneda_id not in processed:
                 if pais.moneda_id not in rates:
                     raise ProviderError("El proveedor no devolvió esta moneda.")
-                key = guardar_cotizacion(pais.moneda, date, ExchangeRateClient.invertir(rates[pais.moneda_id]))
+                events = []
+                key = guardar_cotizacion(pais.moneda, date, ExchangeRateClient.invertir(rates[pais.moneda_id]), eventos=events)
                 result[key] += 1
+                currency_events[pais.moneda_id] = events
                 processed.add(pais.moneda_id)
+            result["datos_nuevos"].extend({**event, "pais": pais.pk} for event in currency_events[pais.moneda_id])
             result["paises_procesados"].append(pais.pk)
         except (ProviderError, ValidationError, IntegrityError) as exc:
             _error(result, pais.pk, str(exc))

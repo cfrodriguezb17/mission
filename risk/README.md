@@ -84,7 +84,9 @@ fallos parciales: 200 con errores explícitos.
 `backend.workflows` coordina el endpoint de sincronización y los comandos
 sync_indicadores/update_tipos_cambio: persisten datos económicos y recalculan
 únicamente los países procesados. La respuesta añade `riesgos`,
-`recalculo_pendiente` y `alertas_pendientes=true`: alerts todavía no existe.
+`recalculo_pendiente` y `alertas_pendientes`: el módulo alerts ya está implementado
+y se ejecuta después del recálculo, incluido el endpoint/comando administrativo.
+Los indicadores de pendiente solo quedan true ante errores de esas etapas.
 Los servicios básicos de economics siguen aislados de risk.
 HTTP opera fuera de transacciones; cada cálculo bloquea país y moneda para
 conservar una instantánea coherente con las escrituras de economics.

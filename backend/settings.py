@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'countries.apps.CountriesConfig',
     'economics.apps.EconomicsConfig',
     'risk.apps.RiskConfig',
+    'alerts.apps.AlertsConfig',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -171,6 +172,7 @@ LOGGING = {
     'loggers': {
         'economics': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'risk': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'alerts': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'countries.services': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }

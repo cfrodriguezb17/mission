@@ -5,8 +5,9 @@ PostgreSQL compartida. Cada módulo es responsable de sus tablas.
 
 Estado: **implementación parcial**. Están implementados `accounts.User`,
 `countries.Moneda`, `countries.Pais`, `economics.TipoIndicador`,
-`economics.IndicadorEconomico`, `economics.TipoCambio` y `risk.IndiceRiesgo`,
-con migraciones aplicadas en la base local.
+`economics.IndicadorEconomico`, `economics.TipoCambio`, `risk.IndiceRiesgo`,
+`alerts.Alerta` y `alerts.LecturaAlerta`, con migraciones aplicadas en la base
+local. La validación y conservación de registros se documentan en README.
 Este documento no acredita la creación de las demás tablas ni
 la aplicación de migraciones. Los nombres de tablas son lógicos; Django podrá
 prefijarlos con el nombre de la app.
@@ -43,7 +44,7 @@ usan `Decimal`, nunca coma flotante para persistencia monetaria.
 | portfolios | Portafolio | PK id; FK usuario → Usuario; UQ (usuario, nombre) | nombre, descripcion, fecha_creacion, fecha_modificacion, activo, es_publico, version |
 | portfolios | Posicion | PK id; FK portafolio → Portafolio; FK pais → Pais | tipo_activo, monto_inversion_usd, fecha_entrada, fecha_salida nullable, notas |
 | risk | IndiceRiesgo | PK id; FK pais → Pais | fecha_calculo, score_economico, score_cambiario, score_estabilidad, indice_compuesto, version_formula, detalle_calculo JSON |
-| alerts | Alerta | PK id; FK usuario → Usuario nullable; FK pais → Pais | tipo_alerta, severidad, titulo, mensaje, fecha_creacion |
+| alerts | Alerta | PK id; FK usuario → Usuario nullable; FK pais → Pais; UQ clave_evento | tipo_alerta, severidad, titulo, mensaje, fecha_creacion, detalle JSON |
 | alerts | LecturaAlerta | PK id; FK usuario → Usuario; FK alerta → Alerta; UQ (usuario, alerta) | fecha_lectura |
 | audit | LogActividad | PK id; FK usuario → Usuario nullable | accion, entidad_afectada, entidad_id, detalle JSON, ip_address nullable, fecha |
 
@@ -62,7 +63,8 @@ El modelo elimina `username` mediante `username = None` en la subclase de
 con `0002_remove_username`, adaptando manager, serializer, admin y pruebas;
 los formularios personalizados ya usan email. La migración se aplicó conservando
 los usuarios existentes y la migración inicial. Moneda y Pais también están
-implementados, al igual que los tres modelos de economics e IndiceRiesgo;
+implementados, al igual que los tres modelos de economics, IndiceRiesgo,
+Alerta y LecturaAlerta;
 las demás tablas siguen en diseño.
 
 Los permisos de Django y el rol de negocio son conceptos distintos: ser
@@ -112,6 +114,9 @@ ese destinatario. No se guarda un booleano `leida` en Alerta: una lectura global
 no debe afectar a los demás usuarios. La existencia de LecturaAlerta determina
 `leida` para el usuario autenticado y permite conocer cuándo la leyó.
 Solo se puede leer una alerta global o dirigida al propio usuario.
+LecturaAlerta está implementada con unicidad usuario/alerta y bloqueo del
+usuario en lectura individual/masiva. La clave única de Alerta evita duplicados
+automáticos por regla y evidencia; detalle conserva el evento que la originó.
 
 ### Datos calculados y evidencia histórica
 
@@ -222,8 +227,9 @@ checks 0–100, versión no vacía e índice (pais, fecha_calculo).
 2. **Completado:** countries: Moneda y Pais, migración, admin, API de lectura y datos de demostración.
 3. **Completado:** economics: TipoIndicador, IndicadorEconomico y TipoCambio.
 4. **Completado:** risk: IndiceRiesgo, cálculo, API, histórico y coordinación de sincronización.
-5. alerts (incluye LecturaAlerta), portfolios y audit con sus dependencias anteriores.
-6. Catálogos y datos de demostración; servicios, API y pruebas de integridad.
+5. **Completado:** alerts: Alerta, LecturaAlerta, generación y API de lectura.
+6. portfolios y audit con sus dependencias anteriores.
+7. Catálogos y datos de demostración; servicios, API y pruebas de integridad.
 
 No editar migraciones ya aplicadas ni reiniciar la base. Verificar las futuras
 migraciones con los datos existentes y con una base de pruebas desde cero.

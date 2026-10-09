@@ -14,7 +14,7 @@ from economics.serializers import FechaFilterSerializer
 
 from .selectors import historico_pais, ultimos_indices
 from .serializers import CalcularSerializer, IndiceRiesgoSerializer
-from .services import recalcular_riesgos
+from backend.workflows import recalcular_con_alertas as recalcular_riesgos
 
 
 class CalcularView(APIView):

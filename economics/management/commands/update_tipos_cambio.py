@@ -11,5 +11,5 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         result = actualizar_tipos_cambio()
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"] or result.get("riesgos", {}).get("errores"):
+        if result["errores"] or result.get("riesgos", {}).get("errores") or result.get("alertas", {}).get("errores"):
             raise CommandError("Actualización parcial: consulte los errores.")
