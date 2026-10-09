@@ -5,8 +5,63 @@
 El esquema objetivo del monolito modular está en
 [MODELO_DATOS.md](MODELO_DATOS.md): tablas, claves, relaciones, restricciones,
 campos calculados y decisiones de conservación histórica. Es diseño previo a
-la implementación; las tablas de negocio todavía no se han creado. Esta
+la implementación completa; Usuario, Moneda y Pais ya están implementados. Esta
 referencia actualiza las propuestas de datos de las notas históricas de abajo.
+
+## Países y monedas implementados
+
+`countries` contiene Moneda y Pais, relacionados con una FK protegida. Una moneda
+puede utilizarse en varios países; su nombre se guarda una sola vez. Los modelos
+tienen validadores y constraints para códigos, nombres no vacíos, regiones,
+coordenadas y población no negativa. Región tiene índice para consultas.
+Ambos modelos están registrados en el admin y se administran mediante los
+permisos de Django. La API es de lectura para todos los usuarios autenticados.
+
+| Método | Endpoint | Comportamiento |
+| --- | --- | --- |
+| GET | `/api/paises/` | Países activos, con paginación y datos de moneda. |
+| GET | `/api/paises/{codigo_iso}/` | Información general de un país activo; admite código en minúsculas. |
+
+Parámetros del listado:
+
+- `region=ANDINA`: también CONO_SUR, CENTROAMERICA o CARIBE; una región inválida
+  devuelve 400 con mensaje en español.
+- `search=Colombia`: busca nombre o código de país y nombre o código de moneda.
+- `ordering=-poblacion`: campos permitidos nombre, codigo_iso, region y poblacion.
+- `page=2&page_size=5`: tamaño por defecto 20 y máximo 100.
+
+La respuesta del listado contiene `count`, `next`, `previous` y `results`.
+Cada país expone codigo_iso, nombre, moneda_codigo, moneda_nombre, region,
+latitud, longitud, poblacion, bandera_url y activo. Las coordenadas se serializan
+como cadenas decimales. Se usa `select_related` para obtener las monedas sin
+una consulta adicional por país. Sin JWT devuelve 401; un país inexistente o
+inactivo devuelve 404; POST/PUT/PATCH/DELETE autenticados devuelven 405.
+
+Instalación y carga desde el entorno mission, en la carpeta backend:
+
+```bash
+python manage.py migrate
+python manage.py seed_countries
+python manage.py runserver
+```
+
+`seed_countries` precarga los 10 países del enunciado y 10 monedas, incluyendo USD.
+Es repetible y conserva datos editados. `--update` reemplaza explícitamente los
+campos de esos registros con los valores de demostración. Las coordenadas,
+monedas y regiones proceden del enunciado; las poblaciones son redondeadas e
+ilustrativas, **no datos oficiales actualizados**. Las URLs de banderas apuntan
+a FlagCDN; no se descargan imágenes durante la carga. La integración con REST
+Countries y los indicadores en el detalle corresponden a fases posteriores.
+
+Verificación del 8 de octubre de 2026: **44 pruebas pasaron en PostgreSQL
+temporal**, incluyendo el historial de migraciones, autenticación, normalización,
+restricciones de BD, carga repetible y API de países. También se comprobó HTTP
+real con un servidor local y otra base temporal: login, refresh, listado,
+detalle, filtros, búsqueda, ordenamiento, paginación y errores 400/401/404/405.
+Ambas bases temporales se eliminaron al pasar.
+
+Se aplicó `countries.0001_initial` y la carga inicial en la base principal:
+10 países y 10 monedas; los 2 usuarios existentes conservan sus datos.
 
 ## Autenticación implementada
 
@@ -104,7 +159,7 @@ de pruebas separada. Para repetir:
 python manage.py test accounts --noinput
 ```
 
-`countries` se deja para la próxima fase según el alcance acordado.
+`countries` ya está implementado; el siguiente módulo es `economics`.
 
 ## Actualización: migraciones y prueba completadas
 
@@ -173,8 +228,8 @@ para diagnosticar el problema. Requiere un rol con permisos para crear bases.
 
 Proyecto Django 5.2 con DRF, PostgreSQL y autenticación JWT configurada en DRF.
 `AUTH_USER_MODEL = "accounts.User"` está definido antes de cualquier migración.
-Solo existe la app de negocio `accounts`: modelo, manager, serializers,
-endpoints de autenticación/perfil, formularios de admin y pruebas.
+Las apps de negocio actuales son `accounts` (autenticación/perfil) y `countries`
+(países y monedas). `common.pagination` proporciona paginación reutilizable.
 Los usuarios están registrados en `/admin/`, con formularios de creación por
 email, nombre completo y contraseña confirmada, edición y cambio de contraseña.
 Solo los superusuarios Django pueden gestionar este panel de usuarios, que incluye

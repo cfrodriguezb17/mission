@@ -3,8 +3,8 @@
 Diseño del backend como monolito modular: una aplicación Django y una base
 PostgreSQL compartida. Cada módulo es responsable de sus tablas.
 
-Estado: **diseño previo a la implementación**. Actualmente solo está implementado
-`accounts.User`. Este documento no acredita la creación de las demás tablas ni
+Estado: **implementación parcial**. Están implementados `accounts.User`,
+`countries.Moneda` y `countries.Pais`, con migraciones aplicadas. Este documento no acredita la creación de las demás tablas ni
 la aplicación de migraciones. Los nombres de tablas son lógicos; Django podrá
 prefijarlos con el nombre de la app.
 
@@ -58,7 +58,8 @@ El modelo elimina `username` mediante `username = None` en la subclase de
 `AbstractUser`; conserva `USERNAME_FIELD = 'email'`. Este ajuste ya se implementó
 con `0002_remove_username`, adaptando manager, serializer, admin y pruebas;
 los formularios personalizados ya usan email. La migración se aplicó conservando
-los usuarios existentes y la migración inicial. Las demás tablas siguen en diseño.
+los usuarios existentes y la migración inicial. Moneda y Pais también están
+implementados; las demás tablas siguen en diseño.
 
 Los permisos de Django y el rol de negocio son conceptos distintos: ser
 superusuario no equivale automáticamente a tener el rol ADMIN.
@@ -205,7 +206,7 @@ y registrar la regla en version_formula; la normalización no cambia sus umbrale
 ## Orden de implementación posterior
 
 1. **Completado:** migración incremental de Usuario para eliminar username y adaptar sus consumidores.
-2. countries: Moneda y Pais.
+2. **Completado:** countries: Moneda y Pais, migración, admin, API de lectura y datos de demostración.
 3. economics: TipoIndicador, IndicadorEconomico y TipoCambio.
 4. portfolios, risk, alerts y audit con sus dependencias anteriores.
 5. Catálogos y datos de demostración; servicios, API y pruebas de integridad.
