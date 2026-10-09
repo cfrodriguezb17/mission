@@ -1,4 +1,81 @@
-# DataPulse Latam — backend, fase 1
+# DataPulse Latam — backend
+
+## Autenticación implementada
+
+`AUTH_USER_MODEL = "accounts.User"` está confirmado. El modelo y las migraciones
+están sincronizados: `makemigrations --check --dry-run` no detectó cambios y
+`migrate` confirmó que no hay migraciones pendientes. La prueba original de
+creación se ejecutó antes de implementar los endpoints y pasó.
+
+Ya existe un superusuario activo en la base principal, que se conserva. En una
+base de pruebas se verificó además que el comando estándar `createsuperuser`
+crea un superusuario sin pedir username y que puede autenticarse mediante email
+y contraseña. No se cambiaron credenciales de usuarios existentes.
+
+| Método | Endpoint | Acceso y comportamiento |
+| --- | --- | --- |
+| POST | `/api/auth/register/` | Público. Crea un usuario VIEWER y responde con su perfil (201). |
+| POST | `/api/auth/login/` | Público. Email y contraseña; devuelve access y refresh (200). |
+| POST | `/api/auth/refresh/` | Público. Recibe refresh válido y devuelve un access nuevo (200). |
+| GET | `/api/auth/me/` | JWT. Devuelve únicamente el perfil del usuario autenticado. |
+| PUT | `/api/auth/me/` | JWT. Requiere email y nombre completo; contraseña opcional. |
+
+Registro:
+
+```json
+{
+  "email": "persona@example.com",
+  "nombre_completo": "Nombre Completo",
+  "password": "MiClaveSegura!739x"
+}
+```
+
+Login:
+
+```json
+{"email": "persona@example.com", "password": "MiClaveSegura!739x"}
+```
+
+Renovación:
+
+```json
+{"refresh": "TOKEN_REFRESH_RECIBIDO_EN_LOGIN"}
+```
+
+Para GET y PUT enviar `Authorization: Bearer TOKEN_ACCESS`. El access dura
+5 minutos y el refresh 1 día. No hay rotación de refresh ni endpoint de logout
+en esta entrega. Los tokens guardan el ID del usuario, por lo que cambiar el
+email no altera la identidad autenticada. El login normaliza email y respeta
+literalmente los espacios de la contraseña.
+
+PUT permite cambiar `email`, `nombre_completo` y, opcionalmente, `password`.
+El email debe ser único tras normalizarlo y sincroniza el username interno.
+La contraseña se valida con la política Django y se guarda mediante hash.
+Al cambiarla se invalidan access y refresh anteriores: iniciar sesión de nuevo.
+PATCH y DELETE no están habilitados.
+
+`id`, `rol`, `fecha_creacion` y `activo` son de solo lectura; si se envían, DRF
+los ignora. Los flags internos de Django y username no están expuestos. El
+registro siempre crea VIEWER activo sin permisos de staff/superusuario. La
+administración de roles y activación permanece en el admin, con acceso explícito
+solo para superusuarios Django.
+
+Errores de entrada y email duplicado devuelven 400. Credenciales incorrectas,
+usuario inactivo, token ausente/inválido/caducado, refresh de usuario eliminado
+o tokens anteriores a un cambio de contraseña devuelven 401. Las contraseñas
+nunca aparecen en las respuestas.
+
+Validación de esta entrega: **25 tests pasaron en PostgreSQL**, incluidos el
+test original de persistencia, comando createsuperuser, registro, login, refresh,
+perfil, protección de roles/activación/permisos, email duplicado, expiración,
+contraseñas incorrectas e invalidación de tokens. Django creó y eliminó una base
+de pruebas separada. Para repetir:
+
+```bash
+python manage.py test accounts --noinput
+```
+
+`countries` se deja para la próxima fase según el alcance acordado.
 
 ## Actualización: migraciones y prueba completadas
 
@@ -44,8 +121,8 @@ para diagnosticar el problema. Requiere un rol con permisos para crear bases.
 
 Proyecto Django 5.2 con DRF, PostgreSQL y autenticación JWT configurada en DRF.
 `AUTH_USER_MODEL = "accounts.User"` está definido antes de cualquier migración.
-Solo existe la app de negocio `accounts`: modelo, manager, serializer y test.
-No hay endpoints de registro, perfil ni emisión/renovación de tokens todavía.
+Solo existe la app de negocio `accounts`: modelo, manager, serializers,
+endpoints de autenticación/perfil, formularios de admin y pruebas.
 Los usuarios están registrados en `/admin/`, con formularios de creación por
 email, nombre completo y contraseña confirmada, edición y cambio de contraseña.
 Solo los superusuarios Django pueden gestionar este panel de usuarios, que incluye
@@ -72,8 +149,11 @@ backend/
     ├── managers.py
     ├── models.py
     ├── serializers.py
+    ├── urls.py
+    ├── views.py
     └── tests/
         ├── __init__.py
+        ├── test_auth_api.py
         └── test_models.py
 ```
 

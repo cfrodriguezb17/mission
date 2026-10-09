@@ -2,7 +2,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import MinLengthValidator
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.utils import get_md5_hash_password
 
 User = get_user_model()
 
@@ -63,7 +69,13 @@ class UserSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return User.objects.create_user(**validated_data)
+        try:
+            with transaction.atomic():
+                return User.objects.create_user(**validated_data)
+        except IntegrityError:
+            # También devolver un error de campo ante registros concurrentes.
+            self.validate_email(validated_data["email"])
+            raise
 
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
@@ -71,5 +83,52 @@ class UserSerializer(serializers.ModelSerializer):
             setattr(instance, field, value)
         if password is not None:
             instance.set_password(password)
-        instance.save()
+        try:
+            with transaction.atomic():
+                instance.save()
+        except IntegrityError:
+            self.validate_email(instance.email)
+            raise
         return instance
+
+
+class ProfileSerializer(UserSerializer):
+    class Meta(UserSerializer.Meta):
+        extra_kwargs = {
+            **UserSerializer.Meta.extra_kwargs,
+            "password": {
+                **UserSerializer.Meta.extra_kwargs["password"],
+                "required": False,
+            },
+        }
+
+
+class LoginSerializer(TokenObtainPairSerializer):
+    default_error_messages = {
+        "no_active_account": "Email o contraseña incorrectos, o cuenta inactiva.",
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"] = serializers.EmailField(write_only=True)
+        self.fields["password"].trim_whitespace = False
+
+    def validate_email(self, value):
+        return User.objects.validate_email(value)
+
+
+class RefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        refresh = self.token_class(attrs["refresh"])
+        user_id = refresh.get(api_settings.USER_ID_CLAIM)
+        if user_id is None:
+            raise InvalidToken("El token no identifica a un usuario.")
+        try:
+            user = User.objects.get(**{api_settings.USER_ID_FIELD: user_id})
+        except User.DoesNotExist as exc:
+            raise AuthenticationFailed("El usuario ya no existe.") from exc
+        if api_settings.CHECK_REVOKE_TOKEN and refresh.get(
+            api_settings.REVOKE_TOKEN_CLAIM
+        ) != get_md5_hash_password(user.password):
+            raise AuthenticationFailed("La contraseña ha cambiado. Inicia sesión de nuevo.")
+        return super().validate(attrs)
