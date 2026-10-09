@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'accounts.apps.AccountsConfig',
     'countries.apps.CountriesConfig',
+    'economics.apps.EconomicsConfig',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -156,3 +157,18 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Presupuesto del endpoint administrativo; los comandos pueden usar uno mayor.
+ECONOMICS_SYNC_BUDGET_SECONDS = 25
+REST_COUNTRIES_API_KEY = os.environ.get('REST_COUNTRIES_API_KEY', '')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'json': {'()': 'common.logging.JsonFormatter'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'json'}},
+    'loggers': {
+        'economics': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'countries.services': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}

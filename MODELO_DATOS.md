@@ -4,7 +4,9 @@ Diseño del backend como monolito modular: una aplicación Django y una base
 PostgreSQL compartida. Cada módulo es responsable de sus tablas.
 
 Estado: **implementación parcial**. Están implementados `accounts.User`,
-`countries.Moneda` y `countries.Pais`, con migraciones aplicadas. Este documento no acredita la creación de las demás tablas ni
+`countries.Moneda`, `countries.Pais`, `economics.TipoIndicador`,
+`economics.IndicadorEconomico` y `economics.TipoCambio`, con migraciones aplicadas.
+Este documento no acredita la creación de las demás tablas ni
 la aplicación de migraciones. Los nombres de tablas son lógicos; Django podrá
 prefijarlos con el nombre de la app.
 
@@ -35,8 +37,8 @@ usan `Decimal`, nunca coma flotante para persistencia monetaria.
 | countries | Moneda | PK codigo (3 caracteres) | nombre |
 | countries | Pais | PK codigo_iso (2 caracteres); FK moneda → Moneda | nombre, region, latitud, longitud, poblacion, bandera_url, activo |
 | economics | TipoIndicador | PK codigo | nombre, unidad, codigo_world_bank (UQ) |
-| economics | IndicadorEconomico | PK id; FK pais → Pais; FK tipo → TipoIndicador; UQ (pais, tipo, anio) | valor, anio, fuente, fecha_actualizacion |
-| economics | TipoCambio | PK id; FK moneda_origen → Moneda; FK moneda_destino → Moneda; UQ (moneda_origen, moneda_destino, fecha) | tasa, fecha, fuente |
+| economics | IndicadorEconomico | PK id; FK pais → Pais; FK tipo → TipoIndicador; UQ (pais, tipo, anio) | valor, anio, fuente, es_simulado, fecha_actualizacion |
+| economics | TipoCambio | PK id; FK moneda_origen → Moneda; FK moneda_destino → Moneda; UQ (moneda_origen, moneda_destino, fecha) | tasa, fecha, fuente, es_simulado |
 | portfolios | Portafolio | PK id; FK usuario → Usuario; UQ (usuario, nombre) | nombre, descripcion, fecha_creacion, fecha_modificacion, activo, es_publico, version |
 | portfolios | Posicion | PK id; FK portafolio → Portafolio; FK pais → Pais | tipo_activo, monto_inversion_usd, fecha_entrada, fecha_salida nullable, notas |
 | risk | IndiceRiesgo | PK id; FK pais → Pais | fecha_calculo, score_economico, score_cambiario, score_estabilidad, indice_compuesto, version_formula, detalle_calculo JSON |
@@ -59,7 +61,7 @@ El modelo elimina `username` mediante `username = None` en la subclase de
 con `0002_remove_username`, adaptando manager, serializer, admin y pruebas;
 los formularios personalizados ya usan email. La migración se aplicó conservando
 los usuarios existentes y la migración inicial. Moneda y Pais también están
-implementados; las demás tablas siguen en diseño.
+implementados, al igual que los tres modelos de economics; las demás tablas siguen en diseño.
 
 Los permisos de Django y el rol de negocio son conceptos distintos: ser
 superusuario no equivale automáticamente a tener el rol ADMIN.
@@ -93,6 +95,13 @@ de millones es una transformación de presentación, no una segunda unidad para
 el mismo tipo. La API conserva el campo `unidad` leyéndolo del catálogo.
 Para aceptar otra unidad de entrada, el servicio convierte el valor antes de
 guardarlo. `fuente` pertenece a cada observación y admite WORLD_BANK o MANUAL.
+
+Implementado: seis tipos precargados por migración, observaciones con
+`DecimalField(24, 6)` y año entre 1 y 9999; cotizaciones con
+`DecimalField(24, 12)`. `es_simulado` distingue datos demostrativos sin duplicar
+información del catálogo. Una observación simulada debe tener fuente MANUAL.
+Las sincronizaciones conservan datos manuales reales y reemplazan simulaciones.
+No se cambia el timestamp si un valor del proveedor no ha cambiado.
 
 ### Lecturas de alertas
 

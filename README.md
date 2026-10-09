@@ -1,11 +1,150 @@
 # DataPulse Latam — backend
 
+## economics implementado — 8 de octubre de 2026
+
+El backend incluye autenticación, países, monedas, indicadores económicos y
+cotizaciones. El segundo ajuste de normalización está implementado:
+`TipoIndicador` guarda nombre, unidad y código World Bank; cada observación
+referencia ese catálogo. `IndicadorEconomico` es único por país/tipo/año y
+`TipoCambio` por par/fecha. Las relaciones están protegidas, las tasas deben
+ser positivas y no se almacenan pares idénticos. El catálogo de seis tipos
+se precarga con una migración de datos. Los tres modelos tienen Django Admin.
+
+### Ejecutar y probar
+
+Desde `backend`, activar el entorno Python e instalar `requirements.txt`.
+Copiar `.env.example` a `.env` y configurar PostgreSQL. No publicar `.env`.
+
+```bash
+python -m pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_economics
+python manage.py runserver
+```
+
+`seed_economics` carga los países si faltan, cinco años completos de los seis
+indicadores para los diez países (300 observaciones) y 30 días de cotizaciones
+para las nueve monedas distintas de USD (270 cotizaciones). Son **datos
+simulados**, con `es_simulado=true`; las observaciones tienen fuente MANUAL y
+las cotizaciones DEMO_SIMULADO. Ecuador usa identidad USD/USD sin filas de
+cotización. La carga conserva registros existentes y puede repetirse.
+`--fecha-fin AAAA-MM-DD` fija el último día simulado para una demostración
+reproducible. Fechas y años predeterminados se calculan en UTC.
+
+```bash
+python manage.py test --noinput
+python manage.py verify_migrations --fresh
+```
+
+Se verificaron modelos, constraints, filtros, permisos, sincronización parcial,
+idempotencia, datos ausentes, conservación de ediciones manuales y errores de
+proveedores sobre PostgreSQL de pruebas. La verificación HTTP usa un servidor
+real con JWT y base de pruebas; el proveedor de esa prueba está controlado.
+También se comprobaron respuestas reales de World Bank y ExchangeRate sin
+guardar esos datos en la base principal. El verificador de migraciones incluye
+economics y elimina su base temporal cuando pasa.
+
+Resultado del 8 de octubre de 2026: **93 pruebas globales correctas**, incluidas
+dos por HTTP real. Cubren también precisión extrema, reintentos HTTP acotados,
+respuestas demasiado grandes, salida de comandos ante fallos, reemplazo de
+simulaciones y logs estructurados. `verify_migrations` aplicó todas las migraciones
+originales desde cero, ejecutó la suite y eliminó la base temporal al pasar.
+También se verificó previamente accounts regenerado desde sus modelos actuales.
+
+### API de economics
+
+Todos los endpoints requieren JWT. Las consultas son de lectura para los tres
+roles; solo ADMIN puede sincronizar. Ser superusuario Django no concede ese rol.
+
+| Método | Endpoint | Parámetros y respuesta |
+| --- | --- | --- |
+| GET | `/api/paises/{codigo_iso}/indicadores/` | `tipo`, `anio`, `ordering`, `page`, `page_size`; unidad desde el catálogo. |
+| GET | `/api/paises/{codigo_iso}/tipo-cambio/` | `fecha_inicio`, `fecha_fin` (AAAA-MM-DD), `ordering`, `page`, `page_size`. |
+| GET | `/api/paises/{codigo_iso}/` | Información general e histórico de indicadores en `indicadores`. |
+| POST | `/api/paises/sync-indicadores/` | JSON opcional: `paises`, `anio_inicio`, `anio_fin`. |
+
+Los históricos usan `count`, `next`, `previous`, `results`, con 20 registros por
+defecto y máximo 100 por página. Indicadores admite orden por `anio`, `tipo`,
+`valor`, `fecha_actualizacion`, `id`; cotizaciones por `fecha`, `tasa`, `id`.
+El prefijo `-` indica orden descendente. Parámetros de filtros y orden inválidos
+devuelven 400; sin JWT, 401; sin rol, 403; país desconocido/inactivo, 404.
+
+Ejemplo de cuerpo de sincronización:
+
+```json
+{"paises": ["CO", "BR"], "anio_inicio": 2021, "anio_fin": 2025}
+```
+
+Por defecto consulta los diez países y los últimos cinco años completos; admite
+hasta 20 años sin años futuros. Devuelve `creados`, `actualizados`, `sin_cambios`,
+`manuales_conservados`, `faltantes`, `paises_procesados`, `errores` y `estado`.
+Si todos los países fallan devuelve 503; si procesa alguno devuelve 200, aunque
+pueda haber errores/faltantes y `estado=PARCIAL`. Los faltantes se reportan por
+país/tipo/año: nunca se convierten en cero ni borran observaciones anteriores.
+
+### Cotizaciones y sincronización
+
+La tasa significa **USD por una unidad de moneda local**: el adaptador invierte
+la tasa USD/local del proveedor. La variación es `(tasa_hoy / tasa_ayer - 1) × 100`,
+redondeada a seis decimales, y usa el día calendario anterior del mismo par,
+incluso si ese día queda fuera del filtro solicitado. Si falta, devuelve
+`variacion_porcentual=null` y `dato_anterior_faltante=true`. Por esta convención,
+una depreciación de la moneda local produce una variación negativa.
+
+Para USD/USD la API genera una serie de identidad (tasa 1, variación 0, fuente
+IDENTIDAD, sin persistencia), de 30 días por defecto y hasta 366 días con filtros.
+No es un histórico obtenido de un proveedor.
+
+```bash
+python manage.py sync_indicadores
+python manage.py sync_indicadores --paises CO BR --anio-inicio 2021 --anio-fin 2025
+python manage.py update_tipos_cambio
+python manage.py sync_countries
+```
+
+Los clientes usan HTTP con timeout de cinco segundos, un reintento ante fallos
+de red, 429 y ciertos 5xx, tamaño de respuesta limitado y validación de JSON.
+World Bank consulta los seis códigos por país con `source=2` y recorre páginas.
+El endpoint limita el presupuesto de consultas a 25 segundos; el comando a
+180 por defecto (`--presupuesto 1–600`). Al agotar el presupuesto reporta los
+países pendientes para reintentarlos. No crea una cola ni un proceso oculto.
+Las llamadas HTTP ocurren fuera de transacciones; cada país/par se guarda
+atómicamente con bloqueo para evitar escrituras concurrentes inconsistentes.
+
+Se conservan observaciones MANUAL reales y cotizaciones de otras fuentes
+reales; los datos simulados pueden reemplazarse por datos del proveedor.
+Valores idénticos no cambian `fecha_actualizacion`. Las cotizaciones usan la
+fecha UTC de actualización del proveedor, no la fecha de ejecución; la API
+gratuita no proporciona los 30 días históricos, por eso el seed los simula.
+Los comandos emiten su resumen y terminan con error si hay fallos parciales.
+Las sincronizaciones registran inicio, fin, países y errores en logs JSON.
+
+Contratos consultados: [World Bank](https://datahelpdesk.worldbank.org/knowledgebase/articles/898581-api-basic-call-structures),
+[ExchangeRate](https://www.exchangerate-api.com/docs/free) y
+[REST Countries v5](https://restcountries.com/docs/countries).
+Se usa el endpoint gratuito vigente `https://open.er-api.com/v6/latest/USD`.
+El frontend que muestre sus tasas debe incluir la atribución al proveedor.
+REST Countries v5 requiere `REST_COUNTRIES_API_KEY`; `sync_countries` conserva
+región y moneda principal del enunciado y actualiza nombre oficial, población,
+coordenadas, bandera y nombre de moneda. Su contrato se verificó con respuestas
+controladas; no se realizó una consulta real con clave propia.
+
+**Siguiente módulo: risk.** El recálculo del IRPC, alertas y auditoría siguen
+pendientes. La respuesta de indicadores lo indica con
+`recalculo_y_alertas_pendientes=true`; la actualización cambiaria con
+`alertas_pendientes=true`. El coordinador se incorporará al implementar esos
+módulos. El handler global de errores, throttling y middleware de requests
+siguen como requisitos transversales pendientes.
+
+Las secciones posteriores conservan notas de entregas anteriores. Este apartado
+y MODELO_DATOS.md describen el estado vigente de economics.
+
 ## Diseño normalizado del modelo de datos
 
 El esquema objetivo del monolito modular está en
 [MODELO_DATOS.md](MODELO_DATOS.md): tablas, claves, relaciones, restricciones,
 campos calculados y decisiones de conservación histórica. Es diseño previo a
-la implementación completa; Usuario, Moneda y Pais ya están implementados. Esta
+la implementación completa; Usuario, Moneda, Pais y los tres modelos de economics ya están implementados. Esta
 referencia actualiza las propuestas de datos de las notas históricas de abajo.
 
 ## Países y monedas implementados
@@ -20,7 +159,7 @@ permisos de Django. La API es de lectura para todos los usuarios autenticados.
 | Método | Endpoint | Comportamiento |
 | --- | --- | --- |
 | GET | `/api/paises/` | Países activos, con paginación y datos de moneda. |
-| GET | `/api/paises/{codigo_iso}/` | Información general de un país activo; admite código en minúsculas. |
+| GET | `/api/paises/{codigo_iso}/` | Información general e indicadores de un país activo; admite código en minúsculas. |
 
 Parámetros del listado:
 
@@ -51,7 +190,7 @@ campos de esos registros con los valores de demostración. Las coordenadas,
 monedas y regiones proceden del enunciado; las poblaciones son redondeadas e
 ilustrativas, **no datos oficiales actualizados**. Las URLs de banderas apuntan
 a FlagCDN; no se descargan imágenes durante la carga. La integración con REST
-Countries y los indicadores en el detalle corresponden a fases posteriores.
+Countries y los indicadores en el detalle se incorporaron con economics.
 
 Verificación del 8 de octubre de 2026: **44 pruebas pasaron en PostgreSQL
 temporal**, incluyendo el historial de migraciones, autenticación, normalización,
@@ -159,7 +298,7 @@ de pruebas separada. Para repetir:
 python manage.py test accounts --noinput
 ```
 
-`countries` ya está implementado; el siguiente módulo es `economics`.
+`countries` y `economics` ya están implementados; el siguiente módulo es `risk`.
 
 ## Actualización: migraciones y prueba completadas
 

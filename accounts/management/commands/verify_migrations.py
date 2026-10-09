@@ -112,6 +112,7 @@ class Command(BaseCommand):
                     "accounts.tests.test_models", "accounts.tests.test_auth_api",
                     "accounts.tests.test_admin",
                     "countries",
+                    "economics",
                 ] if options["fresh"] else []
                 run("test", *test_labels, "--keepdb", "--noinput", overrides={
                     "PYTHONPATH": str(scratch) + os.pathsep + str(project),

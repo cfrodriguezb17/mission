@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from economics.serializers import IndicadorSerializer
 
 from .models import Pais
 
@@ -13,4 +14,12 @@ class PaisSerializer(serializers.ModelSerializer):
             "codigo_iso", "nombre", "moneda_codigo", "moneda_nombre", "region",
             "latitud", "longitud", "poblacion", "bandera_url", "activo",
         ]
+        read_only_fields = fields
+
+
+class PaisDetailSerializer(PaisSerializer):
+    indicadores = IndicadorSerializer(many=True, read_only=True)
+
+    class Meta(PaisSerializer.Meta):
+        fields = PaisSerializer.Meta.fields + ["indicadores"]
         read_only_fields = fields

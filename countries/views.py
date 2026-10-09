@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 from common.pagination import StandardPagination
 
 from .models import Pais
-from .serializers import PaisSerializer
+from .serializers import PaisDetailSerializer, PaisSerializer
 
 
 class PaisListView(generics.ListAPIView):
@@ -27,8 +27,15 @@ class PaisListView(generics.ListAPIView):
 
 
 class PaisDetailView(generics.RetrieveAPIView):
-    queryset = Pais.objects.filter(activo=True).select_related("moneda")
-    serializer_class = PaisSerializer
+    def get_queryset(self):
+        from django.db.models import Prefetch
+        from economics.models import IndicadorEconomico
+
+        return Pais.objects.filter(activo=True).select_related("moneda").prefetch_related(
+            Prefetch("indicadores", queryset=IndicadorEconomico.objects.select_related("tipo")),
+        )
+
+    serializer_class = PaisDetailSerializer
     lookup_field = "codigo_iso"
 
     def get_object(self):
