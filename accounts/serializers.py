@@ -61,7 +61,6 @@ class UserSerializer(serializers.ModelSerializer):
                     "nombre_completo", getattr(self.instance, "nombre_completo", ""),
                 ),
             )
-            candidate.username = candidate.email
             try:
                 validate_password(attrs["password"], user=candidate)
             except DjangoValidationError as exc:

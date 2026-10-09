@@ -10,8 +10,8 @@ class User(AbstractUser):
         ANALISTA = "ANALISTA", "Analista"
         VIEWER = "VIEWER", "Viewer"
 
-    # Conservamos username como identificador interno y admitimos emails largos.
-    username = models.CharField(max_length=254, unique=True, editable=False)
+    # El email es la única identidad de acceso; no duplicarlo en username.
+    username = None
     email = models.EmailField(unique=True, blank=False)
     nombre_completo = models.CharField(max_length=255)
     rol = models.CharField(max_length=8, choices=Rol.choices, default=Rol.VIEWER)
@@ -30,16 +30,9 @@ class User(AbstractUser):
     def clean(self):
         super().clean()
         self.email = type(self).objects.validate_email(self.email)
-        self.username = self.email
 
     def save(self, *args, **kwargs):
         self.email = type(self).objects.validate_email(self.email)
-        self.username = self.email
-        if kwargs.get("update_fields") is not None:
-            fields = set(kwargs["update_fields"])
-            if "email" in fields or "username" in fields:
-                fields.update({"email", "username"})
-            kwargs["update_fields"] = fields
         return super().save(*args, **kwargs)
 
     def get_full_name(self):

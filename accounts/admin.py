@@ -15,9 +15,9 @@ class AccountsUserAdmin(UserAdmin):
     list_filter = ("rol", "is_active", "is_staff", "is_superuser")
     search_fields = ("email", "nombre_completo")
     ordering = ("email",)
-    readonly_fields = ("username", "fecha_creacion", "last_login")
+    readonly_fields = ("fecha_creacion", "last_login")
     fieldsets = (
-        (None, {"fields": ("email", "password", "username")}),
+        (None, {"fields": ("email", "password")}),
         ("Perfil", {"fields": ("nombre_completo", "rol", "is_active")}),
         ("Permisos de Django", {
             "fields": ("is_staff", "is_superuser", "groups", "user_permissions"),

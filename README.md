@@ -1,6 +1,35 @@
 # DataPulse Latam — backend
 
+## Diseño normalizado del modelo de datos
+
+El esquema objetivo del monolito modular está en
+[MODELO_DATOS.md](MODELO_DATOS.md): tablas, claves, relaciones, restricciones,
+campos calculados y decisiones de conservación histórica. Es diseño previo a
+la implementación; las tablas de negocio todavía no se han creado. Esta
+referencia actualiza las propuestas de datos de las notas históricas de abajo.
+
 ## Autenticación implementada
+
+### Actualización: identidad únicamente por email
+
+Se eliminó la columna redundante `username` mediante la migración incremental
+`accounts.0002_remove_username`, conservando `0001_initial`. Modelo, manager,
+serializer y admin usan email; los formularios personalizados ya lo utilizaban.
+`get_username()` sigue funcionando: Django devuelve el campo `USERNAME_FIELD`.
+El formulario de login del admin conserva el nombre HTML `username`, pero su
+valor es el email; esto no implica una columna en la base de datos.
+
+Verificación del 8 de octubre de 2026: **28 pruebas correctas en PostgreSQL**,
+incluyendo JWT, login/alta/edición del admin y migración de un usuario existente
+con su contraseña, grupos y permisos. Se verificaron las migraciones desde cero
+en una base temporal, eliminada al finalizar. Después se aplicó la migración a
+la base principal dentro de una transacción: los 2 usuarios existentes conservan
+todos sus campos restantes, IDs, hashes y relaciones de permisos. Django no
+detectó problemas ni migraciones pendientes.
+
+La eliminación de la columna no ofrece un rollback automático con usuarios
+existentes: volver a `0001` requeriría restaurar y rellenar `username` con email
+antes de exigir NOT NULL y unicidad. No ejecutar esa reversión directamente.
 
 `AUTH_USER_MODEL = "accounts.User"` está confirmado. El modelo y las migraciones
 están sincronizados: `makemigrations --check --dry-run` no detectó cambios y
@@ -49,7 +78,7 @@ email no altera la identidad autenticada. El login normaliza email y respeta
 literalmente los espacios de la contraseña.
 
 PUT permite cambiar `email`, `nombre_completo` y, opcionalmente, `password`.
-El email debe ser único tras normalizarlo y sincroniza el username interno.
+El email debe ser único tras normalizarlo y es la única identidad de acceso.
 La contraseña se valida con la política Django y se guarda mediante hash.
 Al cambiarla se invalidan access y refresh anteriores: iniciar sesión de nuevo.
 PATCH y DELETE no están habilitados.
@@ -78,6 +107,29 @@ python manage.py test accounts --noinput
 `countries` se deja para la próxima fase según el alcance acordado.
 
 ## Actualización: migraciones y prueba completadas
+
+### Comprobación con migraciones regeneradas desde cero
+
+El 8 de octubre de 2026 se verificó también el modelo actual en una base
+PostgreSQL nueva y vacía, sin utilizar el historial de migraciones de accounts.
+Se generó una nueva `0001_initial` en un paquete temporal vacío, se aplicó esa
+migración junto a las migraciones de Django y se confirmó que `accounts_user`
+no contiene la columna `username`. No hubo cambios de modelo sin migración ni
+migraciones pendientes, y los checks de Django pasaron.
+
+Las **27 pruebas funcionales** de modelos, autenticación JWT y admin pasaron
+sobre esa base. La prueba de transición `0001` → `0002` se excluye de este modo
+porque la nueva base solo tiene una migración inicial; ya se verificó por separado
+con el historial incremental. La base temporal se eliminó al pasar. La base
+principal y los archivos de migración originales se conservaron.
+
+Para repetir desde el entorno mission, dentro de backend:
+
+```bash
+python manage.py verify_migrations --fresh
+```
+
+Sin `--fresh`, el comando sigue comprobando el historial original y las 28 pruebas.
 
 Tras configurar PostgreSQL y habilitar el admin, se avanzó a la fase 2:
 se creó y revisó `accounts/migrations/0001_initial.py`, se aplicaron todas las
@@ -127,8 +179,8 @@ Los usuarios están registrados en `/admin/`, con formularios de creación por
 email, nombre completo y contraseña confirmada, edición y cambio de contraseña.
 Solo los superusuarios Django pueden gestionar este panel de usuarios, que incluye
 roles, activación y permisos internos; el rol de negocio ADMIN no concede acceso.
-Los formularios normalizan el email antes de validar unicidad y `save()` sincroniza
-el username. Las contraseñas usan los formularios seguros y validadores de Django.
+Los formularios normalizan el email antes de validar unicidad y `save()` conserva
+esa normalización. Las contraseñas usan los formularios seguros y validadores de Django.
 
 ```text
 backend/
@@ -165,9 +217,9 @@ backend/
   espacios exteriores. La búsqueda de autenticación mediante la clave natural
   aplica la misma normalización. El serializer normaliza antes de verificar
   unicidad y excluye al propio usuario durante una actualización.
-- `username` se conserva como campo interno único, con longitud 254 para admitir
-  emails largos. El manager y `save()` mantienen `username = email`, también al
-  guardar parcialmente con `update_fields`. Las futuras rutas deben usar este
+- `username` se eliminó: email es la única identidad persistida. El manager y
+  `save()` normalizan el email, también al guardar parcialmente con
+  `update_fields=['email']`. Las futuras rutas deben usar este
   serializer o un servicio equivalente; `QuerySet.update()`, `bulk_create()` y
   `bulk_update()` omiten `save()` y no deben usarse para modificar la identidad.
   Las escrituras concurrentes siguen protegidas por la unicidad de la BD; las

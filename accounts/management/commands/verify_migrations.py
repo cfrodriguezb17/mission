@@ -17,6 +17,12 @@ from django.core.management.base import BaseCommand, CommandError
 class Command(BaseCommand):
     help = "Verifica migraciones desde cero y elimina la base temporal si todo pasa."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--fresh", action="store_true",
+            help="Migra usando una nueva 0001 generada desde los modelos actuales, sin el historial original.",
+        )
+
     def handle(self, *args, **options):
         config = settings.DATABASES["default"]
         if config["ENGINE"] != "django.db.backends.postgresql":
@@ -72,18 +78,41 @@ class Command(BaseCommand):
                 if not (package / "0001_initial.py").exists():
                     raise CommandError("No se generó la migración inicial de accounts.")
 
-                run("makemigrations", "--check", "--dry-run")
-                run("migrate", "--noinput")
-                run("migrate", "--check")
-                run("check", "--database", "default")
+                migration_env = temporary_env if options["fresh"] else None
+                run("makemigrations", "--check", "--dry-run", overrides=migration_env)
+                run("migrate", "--noinput", overrides=migration_env)
+                run("migrate", "--check", overrides=migration_env)
+                run("check", "--database", "default", overrides=migration_env)
+
+                if options["fresh"]:
+                    with psycopg.connect(dbname=database, **params) as conn:
+                        migrations = conn.execute(
+                            "SELECT name FROM django_migrations WHERE app = 'accounts' ORDER BY name"
+                        ).fetchall()
+                        if migrations != [("0001_initial",)]:
+                            raise CommandError("La base no contiene únicamente la nueva migración inicial de accounts.")
+                        username = conn.execute(
+                            "SELECT 1 FROM information_schema.columns "
+                            "WHERE table_schema = 'public' AND table_name = 'accounts_user' "
+                            "AND column_name = 'username'"
+                        ).fetchone()
+                        if username:
+                            raise CommandError("El esquema nuevo conserva la columna username.")
+                    self.stdout.write("Esquema nuevo confirmado: solo accounts.0001_initial, sin columna username.")
 
                 # El runner usa esta misma base y la conserva hasta conocer el resultado.
                 (scratch / "verification_settings.py").write_text(
-                    "from backend.settings import *\n"
-                    "DATABASES['default']['TEST'] = "
+                    ("from fresh_settings import *\n" if options["fresh"] else "from backend.settings import *\n")
+                    + "DATABASES['default']['TEST'] = "
                     "{'NAME': DATABASES['default']['NAME']}\n"
                 )
-                run("test", "--keepdb", "--noinput", overrides={
+                # La prueba incremental requiere 0001 + 0002 originales y no aplica
+                # cuando solo existe una nueva 0001; probar todos los flujos funcionales.
+                test_labels = [
+                    "accounts.tests.test_models", "accounts.tests.test_auth_api",
+                    "accounts.tests.test_admin",
+                ] if options["fresh"] else []
+                run("test", *test_labels, "--keepdb", "--noinput", overrides={
                     "PYTHONPATH": str(scratch) + os.pathsep + str(project),
                     "DJANGO_SETTINGS_MODULE": "verification_settings",
                 })

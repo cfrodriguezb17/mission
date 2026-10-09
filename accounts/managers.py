@@ -22,17 +22,16 @@ class UserManager(BaseUserManager):
             raise ValidationError("El email no puede superar 254 caracteres.")
         return email
 
-    def get_by_natural_key(self, username):
-        return self.get(email=self.normalize_email(username))
+    def get_by_natural_key(self, email):
+        return self.get(email=self.normalize_email(email))
 
     def _create_user(self, email, password, **extra_fields):
         email = self.validate_email(email)
-        extra_fields.pop("username", None)
         name = extra_fields.get("nombre_completo", "").strip()
         if not name:
             raise ValidationError({"nombre_completo": "El nombre completo es obligatorio."})
         extra_fields["nombre_completo"] = name
-        user = self.model(email=email, username=email, **extra_fields)
+        user = self.model(email=email, **extra_fields)
         if password is not None:
             validate_password(password, user=user)
         user.set_password(password)

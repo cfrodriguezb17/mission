@@ -52,7 +52,7 @@ class AuthenticationAPITests(APITestCase):
         ), format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = User.objects.get(email="nueva@example.com")
-        self.assertEqual(user.username, user.email)
+        self.assertEqual(user.get_username(), user.email)
         self.assertEqual(user.rol, User.Rol.VIEWER)
         self.assertTrue(user.is_active)
         self.assertFalse(user.is_staff)
@@ -153,7 +153,7 @@ class AuthenticationAPITests(APITestCase):
                 response = self.client.get(self.url("me"))
                 self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_profile_updates_email_and_username_without_password(self):
+    def test_profile_updates_email_without_password(self):
         self.authenticate()
         response = self.client.put(self.url("me"), {
             "email": "  NUEVO@EXAMPLE.COM ", "nombre_completo": "Nombre Actualizado",
@@ -161,7 +161,7 @@ class AuthenticationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "nuevo@example.com")
-        self.assertEqual(self.user.username, self.user.email)
+        self.assertEqual(self.user.get_username(), self.user.email)
         self.assertEqual(self.user.nombre_completo, "Nombre Actualizado")
         self.assertTrue(self.user.check_password(self.password))
         self.assertNotIn("password", response.data)
@@ -192,7 +192,7 @@ class AuthenticationAPITests(APITestCase):
         self.assertTrue(self.user.is_active)
         self.assertFalse(self.user.is_staff)
         self.assertFalse(self.user.is_superuser)
-        self.assertEqual(self.user.username, self.user.email)
+        self.assertEqual(self.user.get_username(), self.user.email)
         self.assertEqual(self.other.nombre_completo, "Otra Persona")
         self.assertEqual(response.data["id"], self.user.pk)
 
