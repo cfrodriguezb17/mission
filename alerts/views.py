@@ -1,10 +1,10 @@
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
-from rest_framework import filters, generics
-from rest_framework.exceptions import ValidationError
+from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 
 from .models import Alerta
@@ -16,7 +16,7 @@ from .services import leer_alerta, leer_todas
 class AlertaListView(generics.ListAPIView):
     serializer_class = AlertaSerializer
     pagination_class = StandardPagination
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [StrictOrderingFilter]
     ordering_fields = ["fecha_creacion", "tipo_alerta", "severidad", "pais", "id"]
     ordering = ["-fecha_creacion", "-id"]
 
@@ -24,14 +24,6 @@ class AlertaListView(generics.ListAPIView):
         params = AlertaFilterSerializer(data=self.request.query_params)
         params.is_valid(raise_exception=True)
         return alertas_visibles(self.request.user).filter(**params.validated_data)
-
-    def filter_queryset(self, queryset):
-        ordering = self.request.query_params.get("ordering")
-        if ordering is not None and (not ordering or any(
-            field.removeprefix("-") not in self.ordering_fields for field in ordering.split(",")
-        )):
-            raise ValidationError({"ordering": "Campos de ordenamiento inválidos."})
-        return super().filter_queryset(queryset)
 
 
 class LeerView(APIView):

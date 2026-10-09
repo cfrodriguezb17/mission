@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.serializers import BooleanQueryField
 from .models import Alerta
 
 
@@ -14,12 +15,8 @@ class AlertaSerializer(serializers.ModelSerializer):
 
 
 class AlertaFilterSerializer(serializers.Serializer):
-    leida = serializers.ChoiceField(choices=["true", "false"], required=False,
-                                   error_messages={"invalid_choice": "Use true o false."})
+    leida = BooleanQueryField(required=False)
     tipo_alerta = serializers.ChoiceField(choices=Alerta.Tipo.choices, required=False,
                                         error_messages={"invalid_choice": "Tipo de alerta inválido."})
     severidad = serializers.ChoiceField(choices=Alerta.Severidad.choices, required=False,
                                       error_messages={"invalid_choice": "Severidad inválida."})
-
-    def validate_leida(self, value):
-        return value == "true"

@@ -1,5 +1,48 @@
 # DataPulse Latam — backend
 
+## common incremental — 8 de octubre de 2026
+
+Se extrajeron piezas compartidas de los módulos existentes: ordenamiento estricto,
+entrada JSON estricta, filtros de fechas y booleanos, y comprobaciones generales
+de rol. Se suman a la paginación y logging ya existentes. Países, economics,
+risk, alerts y portfolios reutilizan estas piezas; risk ya no importa un filtro
+de fechas desde economics. Propiedad, colaboración, capital y riesgo conservan
+sus reglas en sus módulos. [Contratos y consumidores de common](common/README.md).
+
+Los listados rechazan de manera consistente ordenamientos inválidos con 400,
+incluidos países y la serie USD/USD. Verificación: **190 pruebas correctas en
+PostgreSQL**, con ocho nuevas pruebas compartidas y los flujos existentes de
+concurrencia y HTTP con JWT. No se modificaron modelos, migraciones ni datos.
+Handler global de errores, middleware de requests, throttling y CORS siguen
+pendientes; se incorporarán de forma incremental.
+
+## portfolios implementado — 8 de octubre de 2026
+
+El sexto módulo principal incorpora Portafolio y Posicion, CRUD, eliminación
+lógica y cierre, resúmenes desde posiciones activas, filtros y paginación.
+ADMIN administra todos; ANALISTA edita propios y públicos y sus posiciones;
+VIEWER solo consulta. Eliminar o cambiar visibilidad requiere ser propietario
+con rol de escritura o ADMIN. Cada cambio comparte la versión del portafolio,
+usa bloqueo transaccional y devuelve 409 si el cliente envía una versión antigua.
+Django Admin es de consulta para no saltarse esas reglas.
+[API, permisos, validaciones, versiones y seed de portfolios](portfolios/README.md).
+
+Verificación en PostgreSQL: **33 pruebas del módulo**, **182 pruebas globales**
+con migraciones originales y **181** con accounts regenerado. Incluyen cinco
+flujos por HTTP real con JWT y siete escenarios concurrentes en toda la suite.
+Las dos bases de verificación se eliminaron al pasar. Migración nueva
+`portfolios.0001_initial` aplicada a la base local; contenidos de las tablas
+anteriores conservados y comprobados antes/después. No se reescribieron las
+migraciones anteriores ni se modificaron usuarios o sus roles.
+
+`seed_portafolios --usuario EMAIL` permite crear dos ejemplos con cuatro posiciones
+para un ADMIN o ANALISTA existente; probado en bases temporales. La precarga de
+entrega y sus tres usuarios siguen pendientes. Audit, reporting y dashboard
+siguen pendientes; **common se amplía de forma incremental** junto con los
+módulos de negocio, por decisión del usuario. Contiene infraestructura compartida
+y no depende de las apps de negocio. Las notas siguientes conservan el historial
+de entregas anteriores.
+
 ## alerts implementado — 8 de octubre de 2026
 
 El quinto módulo principal incorpora Alerta y LecturaAlerta, completando los

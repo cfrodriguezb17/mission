@@ -115,6 +115,8 @@ class Command(BaseCommand):
                     "economics",
                     "risk",
                     "alerts",
+                    "portfolios",
+                    "common",
                 ] if options["fresh"] else []
                 run("test", *test_labels, "--keepdb", "--noinput", overrides={
                     "PYTHONPATH": str(scratch) + os.pathsep + str(project),

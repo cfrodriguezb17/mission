@@ -3,39 +3,30 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import filters, generics
+from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 from common.permissions import IsAdminRole
+from common.serializers import DateRangeFilterSerializer as FechaFilterSerializer
 from countries.models import Pais
 
 from .models import IndicadorEconomico
 from .selectors import cotizaciones_con_anterior
-from .serializers import FechaFilterSerializer, IndicadorFilterSerializer, IndicadorSerializer, SyncSerializer, TipoCambioSerializer
+from .serializers import IndicadorFilterSerializer, IndicadorSerializer, SyncSerializer, TipoCambioSerializer
 from backend.workflows import sincronizar_y_recalcular as sincronizar_indicadores
 
 
 class EconomicListView(generics.ListAPIView):
     pagination_class = StandardPagination
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [StrictOrderingFilter]
 
     def get_pais(self):
         return get_object_or_404(Pais.objects.filter(activo=True), pk=self.kwargs["codigo_iso"].upper())
-
-    def validate_ordering(self):
-        ordering = self.request.query_params.get("ordering")
-        if ordering is not None and (not ordering or any(
-            field.lstrip("-") not in self.ordering_fields for field in ordering.split(",")
-        )):
-            raise ValidationError({"ordering": "Campos de ordenamiento inválidos."})
-
-    def filter_queryset(self, queryset):
-        self.validate_ordering()
-        return super().filter_queryset(queryset)
 
 
 class IndicadorListView(EconomicListView):
@@ -89,8 +80,7 @@ class TipoCambioListView(EconomicListView):
             page = self.paginate_queryset(queryset)
             return self.get_paginated_response(self.get_serializer(page, many=True).data)
         # La identidad no es una cotización persistida; se pagina igual que el histórico.
-        self.validate_ordering()
-        ordering = request.query_params.get("ordering", "-fecha").split(",")
+        ordering = StrictOrderingFilter().get_ordering(request, self.identity, self)
         for field in reversed(ordering):
             self.identity.sort(key=lambda row: row[field.lstrip("-")] or 0, reverse=field.startswith("-"))
         return self.get_paginated_response(self.paginate_queryset(self.identity))

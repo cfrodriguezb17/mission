@@ -6,7 +6,8 @@ PostgreSQL compartida. Cada módulo es responsable de sus tablas.
 Estado: **implementación parcial**. Están implementados `accounts.User`,
 `countries.Moneda`, `countries.Pais`, `economics.TipoIndicador`,
 `economics.IndicadorEconomico`, `economics.TipoCambio`, `risk.IndiceRiesgo`,
-`alerts.Alerta` y `alerts.LecturaAlerta`, con migraciones aplicadas en la base
+`alerts.Alerta`, `alerts.LecturaAlerta`, `portfolios.Portafolio` y
+`portfolios.Posicion`, con migraciones aplicadas en la base
 local. La validación y conservación de registros se documentan en README.
 Este documento no acredita la creación de las demás tablas ni
 la aplicación de migraciones. Los nombres de tablas son lógicos; Django podrá
@@ -48,8 +49,9 @@ usan `Decimal`, nunca coma flotante para persistencia monetaria.
 | alerts | LecturaAlerta | PK id; FK usuario → Usuario; FK alerta → Alerta; UQ (usuario, alerta) | fecha_lectura |
 | audit | LogActividad | PK id; FK usuario → Usuario nullable | accion, entidad_afectada, entidad_id, detalle JSON, ip_address nullable, fecha |
 
-`dashboard`, `reporting`, `integrations` y `common` no requieren tablas propias
-en esta fase. Obtienen datos de los módulos anteriores.
+`dashboard` y `reporting` no requieren tablas propias en esta fase; obtienen
+datos de los módulos anteriores. `integrations` contiene adaptadores HTTP y
+`common` infraestructura reutilizable sin depender de los módulos de negocio.
 
 ### Usuario
 
@@ -64,7 +66,7 @@ con `0002_remove_username`, adaptando manager, serializer, admin y pruebas;
 los formularios personalizados ya usan email. La migración se aplicó conservando
 los usuarios existentes y la migración inicial. Moneda y Pais también están
 implementados, al igual que los tres modelos de economics, IndiceRiesgo,
-Alerta y LecturaAlerta;
+Alerta, LecturaAlerta, Portafolio y Posicion;
 las demás tablas siguen en diseño.
 
 Los permisos de Django y el rol de negocio son conceptos distintos: ser
@@ -152,20 +154,30 @@ En base de datos:
 
 En serializers y servicios transaccionales:
 
-- VIEWER no crea ni modifica portafolios ni posiciones; ADMIN y ANALISTA también
-  deben satisfacer las reglas de propiedad. Público habilita lectura.
+- VIEWER no crea ni modifica portafolios ni posiciones. ANALISTA crea portafolios
+  y edita los propios y los públicos, incluidas sus posiciones; no accede a
+  privados ajenos. ADMIN puede consultar y editar cualquier portafolio.
+- Público habilita lectura para todos los usuarios autenticados y edición para
+  ANALISTA y ADMIN. Eliminar un portafolio o cambiar su visibilidad se reserva al
+  propietario con rol de escritura o a ADMIN; editar no cambia al propietario.
 - Fecha de entrada no futura; datos y mensajes de validación en español.
 - No agregar MONEDA cuando la moneda principal del país es USD.
 - Capital activo total del portafolio máximo 50.000.000 USD.
 - Máximo dos posiciones activas por portafolio, país y tipo de activo.
-- Bloquear la fila de Portafolio antes de validar agregados y guardar cambios;
-  verificar e incrementar version dentro de la misma transacción. Responder 409
-  ante versiones desactualizadas.
+- El cliente envía version de Portafolio al modificarlo o agregar, editar y cerrar
+  posiciones. Bloquear la fila de Portafolio, comprobar permisos y versión
+  actuales antes de validar agregados y guardar cambios; incrementar version
+  dentro de la misma transacción. Responder 409 en español ante versiones
+  desactualizadas, sin sobrescribir los cambios ya guardados.
 - Lecturas de alertas privadas limitadas a su destinatario.
 
 Los límites agregados y reglas entre tablas no se resuelven con un CHECK de una
-sola fila. Deben comprobarse al agregar, editar y cerrar posiciones. No se
-proponen permisos de edición compartida hasta definir explícitamente su alcance.
+sola fila. Deben comprobarse al agregar, editar y cerrar posiciones. Los permisos
+de edición compartida están acordados en la matriz de ARQUITECTURA.md; los
+modelos, servicios y API de portfolios están implementados. Posicion usa
+`DecimalField(12, 2)` para montos y Portafolio un entero positivo de 64 bits para
+version. La migración `portfolios.0001_initial` crea sus tablas y restricciones
+sin modificar los datos anteriores.
 
 ### Índices y eliminación
 
@@ -228,8 +240,14 @@ checks 0–100, versión no vacía e índice (pais, fecha_calculo).
 3. **Completado:** economics: TipoIndicador, IndicadorEconomico y TipoCambio.
 4. **Completado:** risk: IndiceRiesgo, cálculo, API, histórico y coordinación de sincronización.
 5. **Completado:** alerts: Alerta, LecturaAlerta, generación y API de lectura.
-6. portfolios y audit con sus dependencias anteriores.
-7. Catálogos y datos de demostración; servicios, API y pruebas de integridad.
+6. **Completado:** portfolios: Portafolio, Posicion, permisos de colaboración,
+   versión compartida, validaciones, API, resumen y comando seed repetible.
+7. audit, reporting y dashboard con sus dependencias anteriores.
+8. Completar catálogos y datos de entrega, documentación y despliegue.
+
+En paralelo, ampliar common de forma incremental con las necesidades compartidas
+de cada módulo, sus consumidores y comprobaciones, por decisión del usuario.
+Las reglas de negocio permanecen en sus módulos.
 
 No editar migraciones ya aplicadas ni reiniciar la base. Verificar las futuras
 migraciones con los datos existentes y con una base de pruebas desde cero.

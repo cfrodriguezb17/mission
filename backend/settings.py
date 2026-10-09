@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'economics.apps.EconomicsConfig',
     'risk.apps.RiskConfig',
     'alerts.apps.AlertsConfig',
+    'portfolios.apps.PortfoliosConfig',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'

@@ -1,16 +1,16 @@
 from datetime import datetime, time, timezone as datetime_timezone
 
 from django.shortcuts import get_object_or_404
-from rest_framework import filters, generics
-from rest_framework.exceptions import ValidationError
+from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 from common.permissions import IsAdminRole
+from common.serializers import DateRangeFilterSerializer as FechaFilterSerializer
 from countries.models import Pais
-from economics.serializers import FechaFilterSerializer
 
 from .selectors import historico_pais, ultimos_indices
 from .serializers import CalcularSerializer, IndiceRiesgoSerializer
@@ -30,17 +30,9 @@ class CalcularView(APIView):
 class RiskListView(generics.ListAPIView):
     serializer_class = IndiceRiesgoSerializer
     pagination_class = StandardPagination
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [StrictOrderingFilter]
     ordering_fields = ["pais", "fecha_calculo", "indice_compuesto", "score_economico",
                        "score_cambiario", "score_estabilidad", "id"]
-
-    def filter_queryset(self, queryset):
-        ordering = self.request.query_params.get("ordering")
-        if ordering is not None and (not ordering or any(
-            field.removeprefix("-") not in self.ordering_fields for field in ordering.split(",")
-        )):
-            raise ValidationError({"ordering": "Campos de ordenamiento inválidos."})
-        return super().filter_queryset(queryset)
 
 
 class RankingView(RiskListView):

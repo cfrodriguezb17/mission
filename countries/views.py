@@ -1,6 +1,7 @@
 from rest_framework import filters, generics
 from rest_framework.exceptions import ValidationError
 
+from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 
 from .models import Pais
@@ -10,7 +11,7 @@ from .serializers import PaisDetailSerializer, PaisSerializer
 class PaisListView(generics.ListAPIView):
     serializer_class = PaisSerializer
     pagination_class = StandardPagination
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [filters.SearchFilter, StrictOrderingFilter]
     search_fields = ["nombre", "codigo_iso", "moneda__codigo", "moneda__nombre"]
     ordering_fields = ["nombre", "codigo_iso", "region", "poblacion"]
     ordering = ["nombre", "codigo_iso"]

@@ -1,17 +1,16 @@
 from rest_framework import serializers
 
+from common.serializers import StrictInputSerializer
 from .models import IndiceRiesgo
 from countries.models import Pais
 
 
-class CalcularSerializer(serializers.Serializer):
+class CalcularSerializer(StrictInputSerializer):
+    unknown_field_message = "Parámetro no admitido."
     paises = serializers.ListField(child=serializers.CharField(min_length=2, max_length=2),
                                    min_length=1, max_length=10, required=False)
 
     def validate(self, attrs):
-        unknown = set(self.initial_data) - set(self.fields)
-        if unknown:
-            raise serializers.ValidationError({key: "Parámetro no admitido." for key in sorted(unknown)})
         if "paises" in attrs:
             codes = list(dict.fromkeys(code.upper() for code in attrs["paises"]))
             existing = set(Pais.objects.filter(pk__in=codes, activo=True).values_list("pk", flat=True))

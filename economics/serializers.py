@@ -1,6 +1,9 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from common.serializers import DateRangeFilterSerializer as FechaFilterSerializer, StrictInputSerializer
+
+# FechaFilterSerializer conserva el import público anterior del módulo.
 from .catalog import COUNTRY_CODES, INDICATORS
 from .models import IndicadorEconomico, TipoCambio
 from .selectors import variacion_porcentual
@@ -50,28 +53,14 @@ class IndicadorFilterSerializer(serializers.Serializer):
     anio = serializers.IntegerField(min_value=1, max_value=9999, required=False, error_messages=YEAR_ERRORS)
 
 
-class FechaFilterSerializer(serializers.Serializer):
-    fecha_inicio = serializers.DateField(required=False, input_formats=["%Y-%m-%d"],
-                                          error_messages={"invalid": "Use una fecha válida con formato AAAA-MM-DD."})
-    fecha_fin = serializers.DateField(required=False, input_formats=["%Y-%m-%d"],
-                                      error_messages={"invalid": "Use una fecha válida con formato AAAA-MM-DD."})
-
-    def validate(self, attrs):
-        if "fecha_inicio" in attrs and "fecha_fin" in attrs and attrs["fecha_inicio"] > attrs["fecha_fin"]:
-            raise serializers.ValidationError({"fecha_fin": "Debe ser igual o posterior a fecha_inicio."})
-        return attrs
-
-
-class SyncSerializer(serializers.Serializer):
+class SyncSerializer(StrictInputSerializer):
+    unknown_field_message = "Parámetro no admitido."
     paises = serializers.ListField(child=serializers.ChoiceField(choices=COUNTRY_CODES),
                                    min_length=1, max_length=10, required=False)
     anio_inicio = serializers.IntegerField(min_value=1, max_value=9999, required=False, error_messages=YEAR_ERRORS)
     anio_fin = serializers.IntegerField(min_value=1, max_value=9999, required=False, error_messages=YEAR_ERRORS)
 
     def validate(self, attrs):
-        unknown = set(self.initial_data) - set(self.fields)
-        if unknown:
-            raise serializers.ValidationError({key: "Parámetro no admitido." for key in sorted(unknown)})
         end = attrs.setdefault("anio_fin", timezone.now().year - 1)
         start = attrs.setdefault("anio_inicio", end - 4)
         if end > timezone.now().year or start > end or end - start > 19 or start < 1:
