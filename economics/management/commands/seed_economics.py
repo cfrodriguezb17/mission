@@ -19,7 +19,7 @@ LOCAL_PER_USD = {"COP": "4000", "BRL": "5", "MXN": "18", "ARS": "1000", "CLP": "
 
 
 class Command(BaseCommand):
-    help = "Carga 5 años de indicadores y 30 días de cotizaciones SIMULADOS, sin reemplazar registros existentes."
+    help = "Carga 5 años de indicadores y 31 cotizaciones diarias SIMULADAS para 30 variaciones, sin reemplazar registros."
 
     def add_arguments(self, parser):
         parser.add_argument("--fecha-fin", type=date.fromisoformat, default=None,
@@ -51,9 +51,10 @@ class Command(BaseCommand):
             if country.moneda_id not in LOCAL_PER_USD:
                 raise CommandError(f"No existe una tasa simulada para {country.moneda_id}.")
             currencies.add(country.moneda_id)
-            for offset in range(30):
-                day = end - timedelta(days=29 - offset)
-                local_rate = Decimal(LOCAL_PER_USD[country.moneda_id]) * (1 + Decimal(offset) / 10000)
+            for offset in range(31):
+                day = end - timedelta(days=30 - offset)
+                # Mantener los valores del seed previo de 30 días al añadir el extremo inicial.
+                local_rate = Decimal(LOCAL_PER_USD[country.moneda_id]) * (1 + Decimal(offset - 1) / 10000)
                 _, created = TipoCambio.objects.get_or_create(
                     moneda_origen=country.moneda, moneda_destino_id="USD", fecha=day,
                     defaults={"tasa": decimal_campo(1 / local_rate, 12), "fuente": "DEMO_SIMULADO", "es_simulado": True},

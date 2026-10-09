@@ -107,7 +107,7 @@ class EconomicAPITests(EconomicsTestCase):
 
     def test_list_queries_do_not_grow_with_number_of_results(self):
         for url in (self.indicators, self.quotes):
-            with self.assertNumQueries(3):  # país, conteo, datos (incluye subconsulta del día anterior)
+            with self.assertNumQueries(4):  # país, conteo, datos y un INSERT de auditoría
                 self.assertEqual(self.client.get(url).status_code, 200)
 
     @patch("economics.views.sincronizar_indicadores")

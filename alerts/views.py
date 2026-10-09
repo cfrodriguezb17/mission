@@ -4,6 +4,9 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from audit.mixins import ConsultaAuditadaMixin
+from audit.services import obtener_ip
+
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 
@@ -13,7 +16,8 @@ from .serializers import AlertaFilterSerializer, AlertaSerializer
 from .services import leer_alerta, leer_todas
 
 
-class AlertaListView(generics.ListAPIView):
+class AlertaListView(ConsultaAuditadaMixin, generics.ListAPIView):
+    audit_entidad = "Alerta"
     serializer_class = AlertaSerializer
     pagination_class = StandardPagination
     filter_backends = [StrictOrderingFilter]
@@ -29,17 +33,18 @@ class AlertaListView(generics.ListAPIView):
 class LeerView(APIView):
     def put(self, request, pk):
         alerta = get_object_or_404(alertas_visibles(request.user), pk=pk)
-        leer_alerta(request.user, alerta.pk)
+        leer_alerta(request.user, alerta.pk, ip=obtener_ip(request))
         alerta.leida = True
         return Response(AlertaSerializer(alerta).data)
 
 
 class LeerTodasView(APIView):
     def put(self, request):
-        return Response({"marcadas": leer_todas(request.user)})
+        return Response({"marcadas": leer_todas(request.user, ip=obtener_ip(request))})
 
 
-class ResumenView(APIView):
+class ResumenView(ConsultaAuditadaMixin, APIView):
+    audit_entidad = "Alerta"
     def get(self, request):
         queryset = alertas_visibles(request.user)
         totals = queryset.aggregate(total=Count("pk"), no_leidas=Count("pk", filter=Q(leida=False)))

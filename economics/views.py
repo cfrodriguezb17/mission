@@ -9,6 +9,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from audit.services import obtener_ip
+from audit.mixins import ConsultaAuditadaMixin
+
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 from common.permissions import IsAdminRole
@@ -21,7 +24,9 @@ from .serializers import IndicadorFilterSerializer, IndicadorSerializer, SyncSer
 from backend.workflows import sincronizar_y_recalcular as sincronizar_indicadores
 
 
-class EconomicListView(generics.ListAPIView):
+class EconomicListView(ConsultaAuditadaMixin, generics.ListAPIView):
+    audit_entidad = "IndicadorEconomico"
+    audit_id_kwarg = "codigo_iso"
     pagination_class = StandardPagination
     filter_backends = [StrictOrderingFilter]
 
@@ -45,6 +50,7 @@ class IndicadorListView(EconomicListView):
 
 
 class TipoCambioListView(EconomicListView):
+    audit_entidad = "TipoCambio"
     serializer_class = TipoCambioSerializer
     ordering_fields = ["fecha", "tasa", "id"]
     ordering = ["-fecha", "id"]
@@ -92,7 +98,7 @@ class SyncIndicadoresView(APIView):
     def post(self, request):
         serializer = SyncSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        result = sincronizar_indicadores(**serializer.validated_data,
+        result = sincronizar_indicadores(usuario=request.user, ip=obtener_ip(request), **serializer.validated_data,
                                         presupuesto=settings.ECONOMICS_SYNC_BUDGET_SECONDS)
         status = 503 if result["errores"] and not result["paises_procesados"] else 200
         return Response(result, status=status)

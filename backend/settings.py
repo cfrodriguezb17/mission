@@ -49,12 +49,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'accounts.apps.AccountsConfig',
     'countries.apps.CountriesConfig',
     'economics.apps.EconomicsConfig',
     'risk.apps.RiskConfig',
     'alerts.apps.AlertsConfig',
     'portfolios.apps.PortfoliosConfig',
+    'audit.apps.AuditConfig',
+    'dashboard.apps.DashboardConfig',
+    'reporting.apps.ReportingConfig',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -64,7 +68,19 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    'EXCEPTION_HANDLER': 'common.exceptions.exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {'user': '100/min', 'anon': '20/min'},
 }
+
+CACHES = {'default': {
+    'BACKEND': 'django.core.cache.backends.locmem.LocMemCache' if DEBUG else 'django.core.cache.backends.filebased.FileBasedCache',
+    'LOCATION': os.environ.get('DJANGO_CACHE_LOCATION') or str(BASE_DIR / '.cache'),
+}}
+TEST_RUNNER = 'common.testing.CacheIsolatedRunner'
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
@@ -76,6 +92,9 @@ SIMPLE_JWT = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'common.middleware.RequestLoggingMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -142,7 +161,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es'
 
 TIME_ZONE = 'UTC'
 
@@ -155,6 +174,25 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
+
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin.strip()]
+CORS_URLS_REGEX = r'^/api/.*$'
+CORS_EXPOSE_HEADERS = ['Content-Disposition', 'Retry-After']
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', str(not DEBUG)).lower() == 'true'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+# Activar únicamente detrás de un proxy que elimine/sobrescriba este encabezado.
+if os.environ.get('DJANGO_TRUST_PROXY', 'false').lower() == 'true':
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -174,6 +212,9 @@ LOGGING = {
         'economics': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'risk': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'alerts': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'audit': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         'countries.services': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'api.requests': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'api.errors': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }

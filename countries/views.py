@@ -1,6 +1,8 @@
 from rest_framework import filters, generics
 from rest_framework.exceptions import ValidationError
 
+from audit.mixins import ConsultaAuditadaMixin
+
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 
@@ -8,7 +10,8 @@ from .models import Pais
 from .serializers import PaisDetailSerializer, PaisSerializer
 
 
-class PaisListView(generics.ListAPIView):
+class PaisListView(ConsultaAuditadaMixin, generics.ListAPIView):
+    audit_entidad = "Pais"
     serializer_class = PaisSerializer
     pagination_class = StandardPagination
     filter_backends = [filters.SearchFilter, StrictOrderingFilter]
@@ -27,7 +30,9 @@ class PaisListView(generics.ListAPIView):
         return queryset
 
 
-class PaisDetailView(generics.RetrieveAPIView):
+class PaisDetailView(ConsultaAuditadaMixin, generics.RetrieveAPIView):
+    audit_entidad = "Pais"
+    audit_id_kwarg = "codigo_iso"
     def get_queryset(self):
         from django.db.models import Prefetch
         from economics.models import IndicadorEconomico

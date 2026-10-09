@@ -1,6 +1,7 @@
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from audit.mixins import ConsultaAuditadaMixin
 
 from .serializers import LoginSerializer, ProfileSerializer, RefreshSerializer, UserSerializer
 
@@ -19,7 +20,8 @@ class RefreshView(TokenRefreshView):
     serializer_class = RefreshSerializer
 
 
-class ProfileView(generics.RetrieveUpdateAPIView):
+class ProfileView(ConsultaAuditadaMixin, generics.RetrieveUpdateAPIView):
+    audit_entidad = "Usuario"
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ["get", "put", "head", "options"]

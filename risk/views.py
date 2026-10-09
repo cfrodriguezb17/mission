@@ -6,6 +6,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from audit.services import obtener_ip
+from audit.mixins import ConsultaAuditadaMixin
+
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 from common.permissions import IsAdminRole
@@ -13,7 +16,7 @@ from common.serializers import DateRangeFilterSerializer as FechaFilterSerialize
 from countries.models import Pais
 
 from .selectors import historico_pais, ultimos_indices
-from .serializers import CalcularSerializer, IndiceRiesgoSerializer
+from .serializers import CalcularSerializer, IndiceRiesgoSerializer, RankingSerializer
 from backend.workflows import recalcular_con_alertas as recalcular_riesgos
 
 
@@ -23,11 +26,13 @@ class CalcularView(APIView):
     def post(self, request):
         serializer = CalcularSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        result = recalcular_riesgos(**serializer.validated_data)
+        result = recalcular_riesgos(usuario=request.user, ip=obtener_ip(request), **serializer.validated_data)
         return Response(result, status=503 if result["errores"] and not result["calculados"] else 200)
 
 
-class RiskListView(generics.ListAPIView):
+class RiskListView(ConsultaAuditadaMixin, generics.ListAPIView):
+    audit_entidad = "IndiceRiesgo"
+    audit_id_kwarg = "codigo_iso"
     serializer_class = IndiceRiesgoSerializer
     pagination_class = StandardPagination
     filter_backends = [StrictOrderingFilter]
@@ -36,6 +41,7 @@ class RiskListView(generics.ListAPIView):
 
 
 class RankingView(RiskListView):
+    serializer_class = RankingSerializer
     ordering = ["-indice_compuesto", "pais"]
 
     def get_queryset(self):

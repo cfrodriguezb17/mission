@@ -129,9 +129,9 @@ class EconomicSyncTests(EconomicsTestCase):
     def test_seed_is_repeatable_covers_history_and_preserves_real_values(self):
         call_command("seed_economics", fecha_fin=date(2026, 1, 31), stdout=StringIO())
         self.assertEqual(IndicadorEconomico.objects.count(), 300)
-        self.assertEqual(TipoCambio.objects.count(), 270)
+        self.assertEqual(TipoCambio.objects.count(), 279)
         self.assertEqual(IndicadorEconomico.objects.filter(es_simulado=True).count(), 300)
-        self.assertEqual(TipoCambio.objects.filter(es_simulado=True).count(), 270)
+        self.assertEqual(TipoCambio.objects.filter(es_simulado=True).count(), 279)
         observation = IndicadorEconomico.objects.filter(pais_id="CO", tipo_id="PIB").first()
         observation.valor = Decimal("17")
         observation.fuente = "WORLD_BANK"
@@ -141,7 +141,7 @@ class EconomicSyncTests(EconomicsTestCase):
         observation.refresh_from_db()
         self.assertEqual(observation.valor, 17)
         self.assertEqual(IndicadorEconomico.objects.count(), 300)
-        self.assertEqual(TipoCambio.objects.count(), 270)
+        self.assertEqual(TipoCambio.objects.count(), 279)
 
     @patch("economics.management.commands.sync_indicadores.sincronizar_indicadores")
     def test_sync_command_fails_explicitly_on_partial_errors(self, sync):

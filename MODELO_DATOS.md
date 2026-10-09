@@ -3,14 +3,15 @@
 Diseño del backend como monolito modular: una aplicación Django y una base
 PostgreSQL compartida. Cada módulo es responsable de sus tablas.
 
-Estado: **implementación parcial**. Están implementados `accounts.User`,
+Estado: **modelo de dominio implementado**. Están implementados `accounts.User`,
 `countries.Moneda`, `countries.Pais`, `economics.TipoIndicador`,
 `economics.IndicadorEconomico`, `economics.TipoCambio`, `risk.IndiceRiesgo`,
 `alerts.Alerta`, `alerts.LecturaAlerta`, `portfolios.Portafolio` y
-`portfolios.Posicion`, con migraciones aplicadas en la base
+`portfolios.Posicion` y `audit.LogActividad`, con migraciones aplicadas en la base
 local. La validación y conservación de registros se documentan en README.
-Este documento no acredita la creación de las demás tablas ni
-la aplicación de migraciones. Los nombres de tablas son lógicos; Django podrá
+Dashboard y reporting están implementados como consumidores sin tablas propias.
+Diagrama SVG generado desde los modelos en [modelo-normalizado](docs/modelo-normalizado.svg).
+Los nombres de tablas son lógicos; Django podrá
 prefijarlos con el nombre de la app.
 
 ## Criterios de normalización
@@ -229,8 +230,9 @@ mantiene los históricos requeridos.
 
 IRPC usa la fórmula transcrita por el usuario de la sección 1.4 del enunciado;
 las reglas y decisiones de `irpc-v1` están en [risk/README.md](risk/README.md).
-La transcripción sustituye la antigua afirmación de discrepancia en inflación:
-9,2 % penaliza 10 puntos. Los cuatro decimales usan precisión (5, 2), con
+El contraste con prueba.md confirma una discrepancia: 9,2 % penaliza 10 puntos
+en el algoritmo y 25 en el ejemplo. Se aplica el algoritmo y se documenta un
+ejemplo coherente. Los cuatro decimales usan precisión (5, 2), con
 checks 0–100, versión no vacía e índice (pais, fecha_calculo).
 
 ## Orden de implementación posterior
@@ -242,8 +244,10 @@ checks 0–100, versión no vacía e índice (pais, fecha_calculo).
 5. **Completado:** alerts: Alerta, LecturaAlerta, generación y API de lectura.
 6. **Completado:** portfolios: Portafolio, Posicion, permisos de colaboración,
    versión compartida, validaciones, API, resumen y comando seed repetible.
-7. audit, reporting y dashboard con sus dependencias anteriores.
-8. Completar catálogos y datos de entrega, documentación y despliegue.
+7. **Completado:** audit: LogActividad, eventos transaccionales, resúmenes de tareas y admin de consulta.
+8. **Completado:** reporting y dashboard sin tablas adicionales, con sus dependencias anteriores.
+9. **Completado localmente:** catálogos, datos de demostración y documentación.
+   Publicación y datos en nube pendientes de infraestructura.
 
 En paralelo, ampliar common de forma incremental con las necesidades compartidas
 de cada módulo, sus consumidores y comprobaciones, por decisión del usuario.

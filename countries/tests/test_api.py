@@ -102,7 +102,7 @@ class CountryAPITests(APITestCase):
 
     def test_list_uses_one_join_for_currencies(self):
         self.client.force_authenticate(user=self.user)
-        # Un conteo para paginación y una consulta con JOIN; no una por país.
-        with self.assertNumQueries(2):
+        # Conteo, consulta con JOIN y un INSERT de auditoría; no una por país.
+        with self.assertNumQueries(3):
             response = self.client.get(self.list_url)
         self.assertEqual(response.status_code, 200)

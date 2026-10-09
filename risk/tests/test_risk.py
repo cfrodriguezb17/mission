@@ -127,9 +127,9 @@ class RiskTests(TestCase):
         self.assertEqual(self.client.get(self.ranking).data["count"], 1)
 
     def test_ordering_and_query_count(self):
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):  # conteo, ranking e INSERT de auditoría
             response = self.client.get(self.ranking, {"ordering": "indice_compuesto,pais"})
             self.assertEqual(response.data["results"][0]["pais"], "CO")
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(4):  # país, conteo, histórico e INSERT de auditoría
             response = self.client.get(self.history, {"ordering": "fecha_calculo"})
             self.assertEqual(response.data["results"][0]["id"], self.old.pk)

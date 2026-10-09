@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from common.serializers import StrictInputSerializer
@@ -31,3 +33,23 @@ class IndiceRiesgoSerializer(serializers.ModelSerializer):
         fields = ["id", "pais", "nombre_pais", "fecha_calculo", "score_economico", "score_cambiario",
                   "score_estabilidad", "indice_compuesto", "nivel_riesgo", "color", "version_formula", "detalle_calculo"]
         read_only_fields = fields
+
+
+class RankingSerializer(IndiceRiesgoSerializer):
+    variacion = serializers.SerializerMethodField()
+    tendencia = serializers.SerializerMethodField()
+
+    class Meta(IndiceRiesgoSerializer.Meta):
+        fields = IndiceRiesgoSerializer.Meta.fields + ["variacion", "tendencia"]
+        read_only_fields = fields
+
+    def get_variacion(self, obj):
+        if obj.indice_anterior is None:
+            return None
+        return str((obj.indice_compuesto - obj.indice_anterior).quantize(Decimal("0.01")))
+
+    def get_tendencia(self, obj):
+        if obj.indice_anterior is None:
+            return "SIN_HISTORICO"
+        delta = obj.indice_compuesto - obj.indice_anterior
+        return "MEJORA" if delta > 0 else "EMPEORA" if delta < 0 else "ESTABLE"

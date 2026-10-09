@@ -11,5 +11,5 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         result = sincronizar_paises()
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"]:
+        if result["errores"] or result.get("auditoria_pendiente"):
             raise CommandError("Sincronización de países parcial: consulte los errores.")

@@ -44,7 +44,7 @@ class EconomicsHTTPTests(LiveServerTestCase):
         self.assertTrue(data["results"][0]["es_simulado"])
         status, data = self.request("/api/paises/CO/tipo-cambio/?ordering=fecha", token=token)
         self.assertEqual(status, 200)
-        self.assertEqual(data["count"], 30)
+        self.assertEqual(data["count"], 31)
         self.assertIsNone(data["results"][0]["variacion_porcentual"])
         self.assertIsNotNone(data["results"][1]["variacion_porcentual"])
         status, data = self.request("/api/paises/EC/tipo-cambio/", token=token)

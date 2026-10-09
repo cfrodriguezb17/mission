@@ -1,9 +1,9 @@
 # IRPC — fórmula irpc-v1
 
-Implementado el 8 de octubre de 2026 desde la transcripción de la sección 1.4
-del enunciado compartida por el usuario. No se encontró `prueba.md` en este
-checkout. Esa transcripción sustituye la antigua afirmación de discrepancia
-en inflación: 9,2 % penaliza 10 puntos según los umbrales.
+Implementado el 8 de octubre de 2026. Contrastado con la sección 1.4 del archivo
+`/home/charlie/Downloads/prueba.md`: el algoritmo resta 10 puntos por inflación
+de 9,2 %, mientras su ejemplo resta 25. Se adopta el algoritmo; la discrepancia
+del ejemplo queda documentada y no se cambia la fórmula para reproducir su 69.
 
 ## Fórmula
 
@@ -50,8 +50,19 @@ Nivel/color: ≥75 BAJO/#22c55e, ≥50 MODERADO/#eab308, ≥25 ALTO/#f97316,
   `detalle_calculo.missing_indicators` y `datos_parciales`. Sin entradas, el
   índice puede ser 100 con datos parciales: debe interpretarse junto con esa
   evidencia. Los datos simulados se identifican en cada entrada y mediante
-  `contiene_simulaciones`. El seed actual de 30 cotizaciones no cubre el extremo
-  inicial de una ventana completa de 30 días y lo señala como faltante.
+  `contiene_simulaciones`. El seed ahora incluye 31 cotizaciones por moneda y
+  cubre los 30 días completos sin modificar los valores del seed anterior.
+
+### Ejemplo coherente con irpc-v1
+
+Con PIB per cápita 6.800, inflación 9,2 %, desempleo 11,3 %, deuda/PIB 55 %,
+volatilidad 0,8 %, depreciación 1,5 %, balanza -4,2 % y crecimiento PIB 1,5 %:
+económico = 100 - 5 - 10 - 15 - 10 = 60; cambiario = 90.
+Hay cinco indicadores distintos penalizados (los cuatro económicos y balanza),
+por lo que estabilidad = 100 - 5 - 25 = 70. Compuesto = 60×0,40 + 90×0,30 +
+70×0,30 = **72,00**, MODERADO. El ejemplo original utiliza otra penalización de
+inflación y dice tres indicadores negativos sin definirlos; no es reproducible
+con estos criterios. Este ejemplo describe entradas controladas, no datos reales.
 
 ## Persistencia y API
 

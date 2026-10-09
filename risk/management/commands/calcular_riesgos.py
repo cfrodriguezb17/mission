@@ -15,5 +15,5 @@ class Command(BaseCommand):
         codes = [code.upper() for code in options["paises"]] if options["paises"] else None
         result = recalcular_riesgos(paises=codes)
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"] or result.get("alertas", {}).get("errores"):
+        if result["errores"] or result.get("alertas", {}).get("errores") or result.get("auditoria_pendiente"):
             raise CommandError("Recálculo parcial: consulte los países con errores.")

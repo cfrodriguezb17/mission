@@ -85,7 +85,7 @@ class AlertTests(TestCase):
         for filters in ({"tipo_alerta": "RIESGO"}, {"severidad": "CRITICAL"}):
             response = self.client.get(self.list_url, filters)
             self.assertEqual(response.data["count"], 1)
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(3):  # conteo, listado e INSERT de auditoría
             data = self.client.get(self.list_url, {"page_size": 1, "ordering": "id"}).data
             self.assertEqual(data["results"][0]["id"], self.global_alert.pk)
             self.assertIsNotNone(data["next"])

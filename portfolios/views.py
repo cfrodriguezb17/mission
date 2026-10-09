@@ -4,6 +4,9 @@ from rest_framework import filters, generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from audit.services import obtener_ip
+from audit.mixins import ConsultaAuditadaMixin
+
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 
@@ -31,7 +34,8 @@ def visible(request, pk, bloquear=False):
     return get_object_or_404(queryset.select_for_update() if bloquear else queryset, pk=pk)
 
 
-class PortafolioListView(generics.ListAPIView):
+class PortafolioListView(ConsultaAuditadaMixin, generics.ListAPIView):
+    audit_entidad = "Portafolio"
     serializer_class = PortafolioSerializer
     pagination_class = StandardPagination
     filter_backends = [filters.SearchFilter, StrictOrderingFilter]
@@ -52,11 +56,13 @@ class PortafolioListView(generics.ListAPIView):
     @transaction.atomic
     def post(self, request):
         exigir_escritura(request.user)
-        portfolio = crear_portafolio(request.user, entrada(CrearPortafolioSerializer, request))
+        portfolio = crear_portafolio(request.user, entrada(CrearPortafolioSerializer, request), ip=obtener_ip(request))
         return Response(PortafolioSerializer(portfolio, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
-class PortafolioDetailView(APIView):
+class PortafolioDetailView(ConsultaAuditadaMixin, APIView):
+    audit_entidad = "Portafolio"
+    audit_id_kwarg = "pk"
     @transaction.atomic
     def get(self, request, pk):
         portfolio = visible(request, pk, bloquear=True)
@@ -66,13 +72,13 @@ class PortafolioDetailView(APIView):
     def put(self, request, pk):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(EditarPortafolioSerializer, request)
-        portfolio = editar_portafolio(request.user, pk, data.pop("version"), data)
+        portfolio = editar_portafolio(request.user, pk, data.pop("version"), data, ip=obtener_ip(request))
         return Response(PortafolioDetailSerializer(portfolio, context={"request": request}).data)
 
     def delete(self, request, pk):
         exigir_edicion(request.user, visible(request, pk), solo_propietario=True)
         data = entrada(VersionSerializer, request)
-        eliminar_portafolio(request.user, pk, data["version"])
+        eliminar_portafolio(request.user, pk, data["version"], ip=obtener_ip(request))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -81,7 +87,7 @@ class PosicionCreateView(APIView):
     def post(self, request, pk):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(CrearPosicionSerializer, request)
-        position, portfolio = agregar_posicion(request.user, pk, data.pop("version"), data)
+        position, portfolio = agregar_posicion(request.user, pk, data.pop("version"), data, ip=obtener_ip(request))
         return Response({**PosicionSerializer(position).data, "version_portafolio": portfolio.version},
                         status=status.HTTP_201_CREATED)
 
@@ -91,19 +97,21 @@ class PosicionDetailView(APIView):
     def put(self, request, pk, posicion_id):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(EditarPosicionSerializer, request)
-        position, portfolio = editar_posicion(request.user, pk, posicion_id, data.pop("version"), data)
+        position, portfolio = editar_posicion(request.user, pk, posicion_id, data.pop("version"), data, ip=obtener_ip(request))
         return Response({**PosicionSerializer(position).data, "version_portafolio": portfolio.version})
 
     @transaction.atomic
     def delete(self, request, pk, posicion_id):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(CerrarPosicionSerializer, request)
-        position, portfolio = cerrar_posicion(request.user, pk, posicion_id, data["version"], data.get("fecha_salida"))
+        position, portfolio = cerrar_posicion(request.user, pk, posicion_id, data["version"], data.get("fecha_salida"), ip=obtener_ip(request))
         # El cierre conserva la fila y devuelve la nueva versión para seguir editando.
         return Response({**PosicionSerializer(position).data, "version_portafolio": portfolio.version})
 
 
-class ResumenView(APIView):
+class ResumenView(ConsultaAuditadaMixin, APIView):
+    audit_entidad = "Portafolio"
+    audit_id_kwarg = "pk"
     @transaction.atomic
     def get(self, request, pk):
         return Response(resumen_portafolio(visible(request, pk, bloquear=True)))

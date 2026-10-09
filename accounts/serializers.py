@@ -10,6 +10,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.utils import get_md5_hash_password
 
+from audit.services import obtener_ip, registrar_actividad
+
 User = get_user_model()
 
 
@@ -70,7 +72,10 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         try:
             with transaction.atomic():
-                return User.objects.create_user(**validated_data)
+                user = User.objects.create_user(**validated_data)
+                registrar_actividad(usuario=user, accion="CREAR", entidad="Usuario", entidad_id=user.pk,
+                                    detalle={"operacion": "registro"}, ip=obtener_ip(self.context.get("request")))
+                return user
         except IntegrityError:
             # También devolver un error de campo ante registros concurrentes.
             self.validate_email(validated_data["email"])
@@ -85,6 +90,10 @@ class UserSerializer(serializers.ModelSerializer):
         try:
             with transaction.atomic():
                 instance.save()
+                registrar_actividad(usuario=instance, accion="EDITAR", entidad="Usuario", entidad_id=instance.pk,
+                                    detalle={"operacion": "perfil", "campos": sorted(validated_data),
+                                             "credenciales_actualizadas": password is not None},
+                                    ip=obtener_ip(self.context.get("request")))
         except IntegrityError:
             self.validate_email(instance.email)
             raise
@@ -114,6 +123,13 @@ class LoginSerializer(TokenObtainPairSerializer):
 
     def validate_email(self, value):
         return User.objects.validate_email(value)
+
+    @transaction.atomic
+    def validate(self, attrs):
+        result = super().validate(attrs)
+        registrar_actividad(usuario=self.user, accion="LOGIN", entidad="Usuario", entidad_id=self.user.pk,
+                            detalle={"operacion": "login"}, ip=obtener_ip(self.context.get("request")))
+        return result
 
 
 class RefreshSerializer(TokenRefreshSerializer):

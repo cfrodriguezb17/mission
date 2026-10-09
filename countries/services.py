@@ -11,6 +11,7 @@ from integrations.http import JsonClient, ProviderError
 from integrations.rest_countries import RestCountriesClient
 
 from .models import Pais
+from audit.services import registrar_resultado
 
 logger = logging.getLogger(__name__)
 
@@ -50,4 +51,8 @@ def sincronizar_paises(*, client=None):
             result["errores"].append(message)
             logger.error("Fallo de sincronización de país", extra={"sincronizacion": message})
     logger.info("Fin de sincronización de países", extra={"sincronizacion": result})
+    registrar_resultado(result, accion="EDITAR", entidad="Pais", detalle={
+        "operacion": "sync_countries", "origen": "COMANDO", "paises": result["paises_procesados"],
+        "estado": "PARCIAL" if result["errores"] else "COMPLETO", "errores": len(result["errores"]),
+    })
     return result

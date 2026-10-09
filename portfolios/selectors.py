@@ -16,9 +16,11 @@ def portafolios_visibles(usuario):
     return queryset
 
 
-def resumen_portafolio(portafolio):
-    positions = list(portafolio.posiciones.filter(fecha_salida__isnull=True).select_related("pais"))
-    indices = {index.pais_id: index for index in ultimos_indices().filter(pais_id__in={p.pais_id for p in positions})}
+def resumen_portafolio(portafolio, *, posiciones=None, indices=None):
+    positions = (list(portafolio.posiciones.filter(fecha_salida__isnull=True).select_related("pais"))
+                 if posiciones is None else [p for p in posiciones if p.fecha_salida is None])
+    if indices is None:
+        indices = {index.pais_id: index for index in ultimos_indices().filter(pais_id__in={p.pais_id for p in positions})}
     total = sum((p.monto_inversion_usd for p in positions), Decimal("0"))
     known = sum((p.monto_inversion_usd for p in positions if p.pais_id in indices), Decimal("0"))
     weighted = sum((p.monto_inversion_usd * indices[p.pais_id].indice_compuesto

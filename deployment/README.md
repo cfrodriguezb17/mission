@@ -1,0 +1,78 @@
+# Despliegue del backend
+
+El repositorio contiene un arranque portable para un servicio Python o una imagen
+Docker. La publicación requiere elegir proveedor, conectar repositorio y disponer
+de PostgreSQL. No hay una URL pública configurada ni credenciales de nube en este
+proyecto. El repositorio backend tampoco tiene remoto Git configurado actualmente.
+
+## Servicio Python
+
+Directorio del servicio: `backend` si se publica el repositorio conjunto; la raíz
+si se publica solo este repositorio backend. Build: `pip install -r requirements.txt`.
+Start: `sh deployment/start.sh`. Ejecuta migraciones incrementales, collectstatic
+y Gunicorn con 2 workers (configurable) y timeout de 90 segundos. Health: `/health/`.
+Seed es un paso explícito: `python manage.py seed_data`; no se ejecuta en cada arranque.
+
+Variables de producción:
+
+| Variable | Valor / finalidad |
+| --- | --- |
+| DJANGO_DEBUG | false |
+| DJANGO_SECRET_KEY | Secreto aleatorio propio del entorno. |
+| DJANGO_ALLOWED_HOSTS | Dominio del backend, sin esquema ni rutas. |
+| POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT | Credenciales del PostgreSQL administrado. |
+| CORS_ALLOWED_ORIGINS | Origen HTTPS del cliente; sin barra final. |
+| CSRF_TRUSTED_ORIGINS | Origen HTTPS del admin si se usa un dominio distinto. |
+| DJANGO_SECURE_SSL_REDIRECT | true |
+| DJANGO_SECURE_HSTS_SECONDS | 31536000 tras verificar HTTPS. |
+| DJANGO_TRUST_PROXY | true solo si el proxy sobrescribe X-Forwarded-Proto. |
+| DJANGO_CACHE_LOCATION | Directorio escribible compartido entre workers de esta instancia. |
+| REST_COUNTRIES_API_KEY | Clave v5 para sincronización real de datos generales. |
+| PORT, WEB_CONCURRENCY | Puerto del proveedor y número de workers. |
+
+El proveedor debe suministrar HTTPS y un proxy confiable. Confirmar que health
+recibe el protocolo correcto o permite seguir la redirección HTTPS. Los archivos
+estáticos del admin se sirven con WhiteNoise. PostgreSQL sigue siendo persistente
+y externo al contenedor. Para varias instancias, sustituir FileBasedCache por una
+caché compartida central y validar throttling; DRF no garantiza conteos estrictos
+bajo concurrencia. No se considera autenticado un proxy por el simple encabezado.
+
+Comprobar configuración antes de publicar:
+
+```bash
+python manage.py check --deploy
+python manage.py migrate --check
+python manage.py seed_data
+```
+
+Verificar tras publicar: `/health/`, `/api/`, `/api/docs/`, login de los tres roles,
+dashboard, PDF y CORS desde el origen permitido. Registrar URL y resultados en el
+README cuando exista una publicación real. Credenciales DEMO están exigidas por
+la prueba; los datos históricos de seed son simulados.
+
+## Docker
+
+```bash
+docker build -t datapulse-backend .
+docker run --env-file .env -p 8000:8000 datapulse-backend
+```
+
+El contenedor usa un usuario sin privilegios. `POSTGRES_HOST` debe ser accesible
+desde él; localhost no apunta a la base del host. `.dockerignore` excluye secretos,
+entornos locales, Git, cachés y artefactos. El Dockerfile está preparado; no se
+afirma una construcción verificada mientras no se ejecute Docker.
+
+## Programación en un servidor Linux
+
+Las unidades systemd incluidas son plantillas para `/opt/datapulse/backend`, un
+usuario de sistema datapulse y un entorno `/etc/datapulse/backend.env`. Adaptar
+rutas/usuario al servidor; copiar los cuatro archivos a `/etc/systemd/system/`
+y habilitar los dos timers. Los secretos quedan en el archivo de entorno con
+permisos restringidos, nunca en las unidades.
+
+Cotizaciones: diario 03:00 UTC. Indicadores: diario 03:15 UTC. Ambas tareas llaman
+workflows y recalculan riesgo/alertas. Persistent recupera una ejecución omitida;
+systemd evita solapar una misma unidad. Revisar journal y salida ante errores
+parciales; los comandos devuelven fallo para exigir atención/reintento.
+En hosting administrado usar su scheduler con estos mismos comandos y variables.
+Las unidades se entregan preparadas; no están instaladas ni activas en el equipo.

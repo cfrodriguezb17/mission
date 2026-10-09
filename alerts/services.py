@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404
 
 from countries.models import Pais
 from risk.models import IndiceRiesgo
+from audit.services import registrar_actividad
 
 from .models import Alerta, LecturaAlerta
 from .selectors import alertas_visibles
@@ -21,17 +22,24 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def leer_alerta(usuario, alerta_id):
+def leer_alerta(usuario, alerta_id, *, ip=None):
     get_user_model().objects.select_for_update().get(pk=usuario.pk)
     alerta = get_object_or_404(alertas_visibles(usuario).select_for_update(), pk=alerta_id)
-    return LecturaAlerta.objects.get_or_create(usuario=usuario, alerta=alerta)[0]
+    lectura, created = LecturaAlerta.objects.get_or_create(usuario=usuario, alerta=alerta)
+    if created:
+        registrar_actividad(usuario=usuario, accion="EDITAR", entidad="Alerta", entidad_id=alerta.pk, ip=ip,
+                            detalle={"operacion": "leer_alerta"})
+    return lectura
 
 
 @transaction.atomic
-def leer_todas(usuario):
+def leer_todas(usuario, *, ip=None):
     get_user_model().objects.select_for_update().get(pk=usuario.pk)
     ids = list(alertas_visibles(usuario).filter(leida=False).values_list("pk", flat=True))
     LecturaAlerta.objects.bulk_create([LecturaAlerta(usuario=usuario, alerta_id=pk) for pk in ids], ignore_conflicts=True)
+    if ids:
+        registrar_actividad(usuario=usuario, accion="EDITAR", entidad="Alerta", ip=ip,
+                            detalle={"operacion": "leer_todas", "marcadas": len(ids)})
     return len(ids)
 
 
