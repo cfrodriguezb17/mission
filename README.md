@@ -1,5 +1,26 @@
 # DataPulse Latam — backend
 
+## risk implementado — 8 de octubre de 2026
+
+El backend incluye `IndiceRiesgo`, cálculo IRPC con evidencia histórica,
+ranking, detalle/histórico y recálculo exclusivo ADMIN. El endpoint y los
+comandos de sincronización ahora recalculan los países procesados mediante
+`backend.workflows`; las alertas siguen pendientes. El admin de riesgo es de
+consulta. [Fórmula, decisiones, API y comandos de risk](risk/README.md).
+
+Migración `risk.0001_initial` aplicada a la base local, con un índice calculado
+para cada uno de los 10 países. Se conservaron 2 usuarios, 10 monedas, 10 países,
+6 tipos, 300 observaciones y 270 cotizaciones. Nueve índices marcan histórico
+cambiario incompleto por faltar el extremo inicial de la ventana; Ecuador usa
+identidad. No se rellenaron datos ni se reemplazaron observaciones existentes.
+
+Verificación global del historial original: **124 pruebas correctas en
+PostgreSQL**, incluidas tres por HTTP real y una de cálculos simultáneos.
+Migraciones originales desde cero comprobadas; base temporal eliminada al pasar.
+También pasó el modo `--fresh` con 122 pruebas antes de incorporar la prueba
+de concurrencia (excluye la prueba de transición original de accounts).
+Las notas siguientes conservan el historial de entregas anteriores.
+
 ## economics implementado — 8 de octubre de 2026
 
 El backend incluye autenticación, países, monedas, indicadores económicos y

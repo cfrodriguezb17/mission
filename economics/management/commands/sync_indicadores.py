@@ -3,7 +3,7 @@ import json
 from django.core.management.base import BaseCommand, CommandError
 
 from economics.catalog import COUNTRY_CODES
-from economics.services import sincronizar_indicadores
+from backend.workflows import sincronizar_y_recalcular as sincronizar_indicadores
 
 
 class Command(BaseCommand):
@@ -24,5 +24,5 @@ class Command(BaseCommand):
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"]:
+        if result["errores"] or result.get("riesgos", {}).get("errores"):
             raise CommandError("Sincronización parcial: consulte los errores y reintente los países pendientes.")

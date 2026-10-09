@@ -2,7 +2,7 @@ import json
 
 from django.core.management.base import BaseCommand, CommandError
 
-from economics.services import actualizar_tipos_cambio
+from backend.workflows import actualizar_y_recalcular as actualizar_tipos_cambio
 
 
 class Command(BaseCommand):
@@ -11,5 +11,5 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         result = actualizar_tipos_cambio()
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"]:
+        if result["errores"] or result.get("riesgos", {}).get("errores"):
             raise CommandError("Actualización parcial: consulte los errores.")

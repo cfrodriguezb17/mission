@@ -16,7 +16,7 @@ from countries.models import Pais
 from .models import IndicadorEconomico
 from .selectors import cotizaciones_con_anterior
 from .serializers import FechaFilterSerializer, IndicadorFilterSerializer, IndicadorSerializer, SyncSerializer, TipoCambioSerializer
-from .services import sincronizar_indicadores
+from backend.workflows import sincronizar_y_recalcular as sincronizar_indicadores
 
 
 class EconomicListView(generics.ListAPIView):

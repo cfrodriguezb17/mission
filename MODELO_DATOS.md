@@ -5,7 +5,8 @@ PostgreSQL compartida. Cada módulo es responsable de sus tablas.
 
 Estado: **implementación parcial**. Están implementados `accounts.User`,
 `countries.Moneda`, `countries.Pais`, `economics.TipoIndicador`,
-`economics.IndicadorEconomico` y `economics.TipoCambio`, con migraciones aplicadas.
+`economics.IndicadorEconomico`, `economics.TipoCambio` y `risk.IndiceRiesgo`,
+con migraciones aplicadas en la base local.
 Este documento no acredita la creación de las demás tablas ni
 la aplicación de migraciones. Los nombres de tablas son lógicos; Django podrá
 prefijarlos con el nombre de la app.
@@ -61,7 +62,8 @@ El modelo elimina `username` mediante `username = None` en la subclase de
 con `0002_remove_username`, adaptando manager, serializer, admin y pruebas;
 los formularios personalizados ya usan email. La migración se aplicó conservando
 los usuarios existentes y la migración inicial. Moneda y Pais también están
-implementados, al igual que los tres modelos de economics; las demás tablas siguen en diseño.
+implementados, al igual que los tres modelos de economics e IndiceRiesgo;
+las demás tablas siguen en diseño.
 
 Los permisos de Django y el rol de negocio son conceptos distintos: ser
 superusuario no equivale automáticamente a tener el rol ADMIN.
@@ -208,17 +210,20 @@ Los nombres y campos de la API pueden conservarse aunque cambie el almacenamient
 objetivo agrega Moneda, TipoIndicador y LecturaAlerta, elimina duplicidades y
 mantiene los históricos requeridos.
 
-El algoritmo y el ejemplo del enunciado discrepan en inflación: 9,2 % recibe −10
-según el algoritmo, frente a −25 en el ejemplo. Usar provisionalmente el algoritmo
-y registrar la regla en version_formula; la normalización no cambia sus umbrales.
+IRPC usa la fórmula transcrita por el usuario de la sección 1.4 del enunciado;
+las reglas y decisiones de `irpc-v1` están en [risk/README.md](risk/README.md).
+La transcripción sustituye la antigua afirmación de discrepancia en inflación:
+9,2 % penaliza 10 puntos. Los cuatro decimales usan precisión (5, 2), con
+checks 0–100, versión no vacía e índice (pais, fecha_calculo).
 
 ## Orden de implementación posterior
 
 1. **Completado:** migración incremental de Usuario para eliminar username y adaptar sus consumidores.
 2. **Completado:** countries: Moneda y Pais, migración, admin, API de lectura y datos de demostración.
-3. economics: TipoIndicador, IndicadorEconomico y TipoCambio.
-4. portfolios, risk, alerts y audit con sus dependencias anteriores.
-5. Catálogos y datos de demostración; servicios, API y pruebas de integridad.
+3. **Completado:** economics: TipoIndicador, IndicadorEconomico y TipoCambio.
+4. **Completado:** risk: IndiceRiesgo, cálculo, API, histórico y coordinación de sincronización.
+5. alerts (incluye LecturaAlerta), portfolios y audit con sus dependencias anteriores.
+6. Catálogos y datos de demostración; servicios, API y pruebas de integridad.
 
 No editar migraciones ya aplicadas ni reiniciar la base. Verificar las futuras
 migraciones con los datos existentes y con una base de pruebas desde cero.
