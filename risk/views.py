@@ -12,6 +12,7 @@ from audit.mixins import ConsultaAuditadaMixin
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 from common.permissions import IsAdminRole
+from common.responses import operation_response
 from common.serializers import DateRangeFilterSerializer as FechaFilterSerializer
 from countries.models import Pais
 
@@ -27,7 +28,7 @@ class CalcularView(APIView):
         serializer = CalcularSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = recalcular_riesgos(usuario=request.user, ip=obtener_ip(request), **serializer.validated_data)
-        return Response(result, status=503 if result["errores"] and not result["calculados"] else 200)
+        return operation_response(result, completed_key="calculados")
 
 
 class RiskListView(ConsultaAuditadaMixin, generics.ListAPIView):

@@ -13,6 +13,7 @@ from audit.services import registrar_actividad
 
 from .models import Portafolio, Posicion
 from .permissions import exigir_edicion, exigir_escritura
+from .selectors import nombre_disponible, portafolios_visibles
 
 
 class ConflictoVersion(APIException):
@@ -55,7 +56,7 @@ def _validar_modelo(instance):
 
 
 def _guardar_portafolio(portfolio):
-    if Portafolio.objects.filter(usuario_id=portfolio.usuario_id, nombre=portfolio.nombre).exclude(pk=portfolio.pk).exists():
+    if not nombre_disponible(portfolio.usuario_id, portfolio.nombre, excluir=portfolio.pk):
         raise ValidationError({"nombre": "Ya tiene un portafolio con ese nombre, incluso si está eliminado."})
     _validar_modelo(portfolio)
     try:
@@ -65,6 +66,21 @@ def _guardar_portafolio(portfolio):
         if getattr(getattr(exc.__cause__, "diag", None), "constraint_name", None) == "portafolio_usuario_nombre_uq":
             raise ValidationError({"nombre": "Ya tiene un portafolio con ese nombre."}) from exc
         raise
+
+
+def validar_nombre_portafolio(usuario, nombre, *, excluir=None):
+    actor = _usuario_actual(usuario)
+    propietario_id = actor.pk
+    if excluir is None:
+        exigir_escritura(actor)
+    else:
+        try:
+            portfolio = portafolios_visibles(actor).get(pk=excluir)
+        except Portafolio.DoesNotExist:
+            raise NotFound("Portafolio no encontrado.")
+        exigir_edicion(actor, portfolio)
+        propietario_id = portfolio.usuario_id
+    return nombre_disponible(propietario_id, nombre, excluir=excluir)
 
 
 @transaction.atomic

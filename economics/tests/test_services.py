@@ -5,17 +5,59 @@ from unittest.mock import Mock, patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.core.exceptions import ValidationError
+from django.db import OperationalError
 
-from countries.models import Pais
+from countries.models import Moneda, Pais
 from countries.services import sincronizar_paises
-from economics.models import IndicadorEconomico, TipoCambio
-from economics.services import actualizar_tipos_cambio, sincronizar_indicadores
+from economics.models import IndicadorEconomico, LoteActualizacion, TipoCambio
+from economics.services import actualizar_tipos_cambio, guardar_cotizacion, sincronizar_indicadores
 from integrations.http import ProviderError
 
 from .base import EconomicsTestCase
 
 
 class EconomicSyncTests(EconomicsTestCase):
+    def test_quote_revision_identifies_each_effective_write_including_return_to_old_rate(self):
+        currency = Moneda.objects.get(pk="COP")
+        events = []
+        for revision, rate in enumerate(("0.00025", "0.00020", "0.00025"), start=1):
+            result = guardar_cotizacion(currency, date(2026, 10, 10), Decimal(rate), eventos=events)
+            self.assertEqual(result, "creados" if revision == 1 else "actualizados")
+            self.assertEqual(TipoCambio.objects.get().revision, revision)
+            self.assertEqual(events[-1]["revision"], revision)
+        self.assertEqual([lote.datos[0]["revision"] for lote in LoteActualizacion.objects.all()], [1, 2, 3])
+        self.assertEqual(guardar_cotizacion(currency, date(2026, 10, 10), Decimal("0.00025"), eventos=events),
+                         "sin_cambios")
+        self.assertEqual(TipoCambio.objects.get().revision, 3)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(LoteActualizacion.objects.count(), 3)
+
+    def test_failed_quote_batch_rolls_back_rate_revision_and_all_shared_country_batches(self):
+        Pais.objects.filter(pk="BR").update(moneda_id="COP")
+        currency = Moneda.objects.get(pk="COP")
+        guardar_cotizacion(currency, date(2026, 10, 10), Decimal("0.00025"))
+        register = LoteActualizacion.objects.get_or_create
+
+        def fail_second_country(*args, **kwargs):
+            if kwargs["defaults"]["pais_id"] == "CO":
+                raise OperationalError("controlled-batch-failure")
+            return register(*args, **kwargs)
+
+        events = []
+        with patch("economics.services.LoteActualizacion.objects.get_or_create", side_effect=fail_second_country):
+            with self.assertRaises(OperationalError):
+                guardar_cotizacion(currency, date(2026, 10, 10), Decimal("0.00020"), eventos=events)
+        quote = TipoCambio.objects.get()
+        self.assertEqual(quote.tasa, Decimal("0.00025"))
+        self.assertEqual(quote.revision, 1)
+        self.assertEqual(LoteActualizacion.objects.count(), 2)
+        self.assertTrue(all(lote.datos[0]["revision"] == 1 for lote in LoteActualizacion.objects.all()))
+        self.assertEqual(events, [])
+        guardar_cotizacion(currency, quote.fecha, Decimal("0.00020"))
+        self.assertEqual(TipoCambio.objects.get().revision, 2)
+        self.assertEqual(LoteActualizacion.objects.count(), 4)
+
     def provider(self, value=Decimal("123.4567895")):
         provider = Mock()
         provider.indicadores.return_value = [{"codigo_world_bank": "NY.GDP.MKTP.CD", "anio": 2025, "valor": value}]
@@ -72,6 +114,63 @@ class EconomicSyncTests(EconomicsTestCase):
         self.assertTrue(any("Fin" in entry for entry in logs.output))
         self.assertTrue(any("ERROR" in entry for entry in logs.output))
 
+    def test_real_integrity_error_is_safe_rolls_back_country_and_continues(self):
+        provider = self.provider()
+        provider.indicadores.return_value.append({
+            "codigo_world_bank": "FP.CPI.TOTL.ZG", "anio": 2025, "valor": Decimal("4")})
+        original_save = IndicadorEconomico.save
+
+        def save(observation, *args, **kwargs):
+            if observation.pais_id == "CO" and observation.tipo_id == "INFLACION":
+                # Violación real de unicidad tras guardar el PIB: el país debe revertirse.
+                Pais.objects.get(pk="CO").save(force_insert=True)
+            return original_save(observation, *args, **kwargs)
+
+        with patch.object(IndicadorEconomico, "save", autospec=True, side_effect=save), \
+                self.assertLogs("economics.services", level="INFO") as logs:
+            result = sincronizar_indicadores(paises=["CO", "BR"], anio_inicio=2025,
+                                             anio_fin=2025, client=provider)
+        self.assertEqual(result["paises_procesados"], ["BR"])
+        self.assertEqual(result["creados"], 2)
+        self.assertEqual(result["errores"], [{
+            "pais": "CO", "mensaje": "No se pudieron guardar los indicadores económicos."}])
+        self.assertFalse(IndicadorEconomico.objects.filter(pais_id="CO").exists())
+        self.assertEqual(IndicadorEconomico.objects.filter(pais_id="BR").count(), 2)
+        self.assertNotIn("countries_pais_pkey", str(result))
+        self.assertTrue(any(getattr(record, "tipo_error", None) == "IntegrityError" for record in logs.records))
+
+    def test_validation_and_database_errors_never_publish_raw_diagnostics(self):
+        for error in (ValidationError({"valor": "diagnostico-privado"}),
+                      OperationalError("password=diagnostico-privado")):
+            with self.subTest(error=type(error).__name__), \
+                    patch("economics.services.guardar_indicadores", side_effect=error):
+                result = self.sync(self.provider())
+                self.assertEqual(result["errores"], [{
+                    "pais": "CO", "mensaje": "No se pudieron guardar los indicadores económicos."}])
+                self.assertNotIn("diagnostico-privado", str(result))
+                self.assertEqual(result["paises_procesados"], [])
+
+    def test_exchange_integrity_error_is_safe_and_other_currencies_are_saved(self):
+        provider = Mock()
+        provider.cotizaciones.return_value = (date(2026, 1, 2), {"COP": 4000, "BRL": 5})
+        original_save = TipoCambio.save
+
+        def save(quote, *args, **kwargs):
+            if quote.moneda_origen_id == "COP":
+                Pais.objects.get(pk="CO").save(force_insert=True)
+            return original_save(quote, *args, **kwargs)
+
+        with patch.object(TipoCambio, "save", autospec=True, side_effect=save), \
+                self.assertLogs("economics.services", level="INFO") as logs:
+            result = actualizar_tipos_cambio(client=provider)
+        self.assertIn({"pais": "CO", "mensaje": "No se pudo guardar la cotización."}, result["errores"])
+        self.assertNotIn("countries_pais_pkey", str(result))
+        self.assertNotIn("CO", result["paises_procesados"])
+        self.assertIn("BR", result["paises_procesados"])
+        self.assertFalse(TipoCambio.objects.filter(moneda_origen_id="COP").exists())
+        self.assertEqual(TipoCambio.objects.get(moneda_origen_id="BRL").tasa, Decimal("0.2"))
+        self.assertTrue(any(getattr(record, "tipo_error", None) == "IntegrityError" for record in logs.records))
+
     def test_country_transaction_rolls_back_on_unrepresentable_value(self):
         provider = self.provider()
         provider.indicadores.return_value.append({"codigo_world_bank": "FP.CPI.TOTL.ZG", "anio": 2025, "valor": Decimal("1e40")})
@@ -125,6 +224,8 @@ class EconomicSyncTests(EconomicsTestCase):
         self.assertEqual(result["manuales_conservados"], 1)
         quote.refresh_from_db()
         self.assertEqual(quote.tasa, Decimal("0.0003"))
+        self.assertEqual(quote.revision, 0)
+        self.assertFalse(LoteActualizacion.objects.exists())
 
     def test_seed_is_repeatable_covers_history_and_preserves_real_values(self):
         call_command("seed_economics", fecha_fin=date(2026, 1, 31), stdout=StringIO())

@@ -97,11 +97,21 @@ sync_indicadores/update_tipos_cambio: persisten datos económicos y recalculan
 únicamente los países procesados. La respuesta añade `riesgos`,
 `recalculo_pendiente` y `alertas_pendientes`: el módulo alerts ya está implementado
 y se ejecuta después del recálculo, incluido el endpoint/comando administrativo.
-Los indicadores de pendiente solo quedan true ante errores de esas etapas.
+Los indicadores de pendiente quedan true ante errores o trabajos de alertas
+todavía sin procesar en el alcance.
 Los servicios básicos de economics siguen aislados de risk.
 HTTP opera fuera de transacciones; cada cálculo bloquea país y moneda para
 conservar una instantánea coherente con las escrituras de economics.
 Los comandos fallan ante errores de sincronización o recálculo.
+
+Cada índice nuevo conserva `fecha_alertas_procesadas=NULL` dentro de la
+transacción del cálculo. Alerts confirma el marcador y sus eventos juntos,
+también cuando ninguna regla aplica. El recuperador consulta todos los índices
+pendientes del alcance, incluidos históricos. `risk.0002_indice_alertas_procesadas`
+revisa únicamente el último índice previo por país; los anteriores se excluyen
+de revisión retrospectiva para evitar notificaciones masivas. El marcador es
+interno y no se expone en el serializador del índice.
+[Límites, política de migración y contrato de pendientes](../alerts/README.md).
 
 ```bash
 python manage.py migrate

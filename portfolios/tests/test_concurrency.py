@@ -54,6 +54,21 @@ class PortfolioConcurrencyTests(TransactionTestCase):
         self.portfolio.refresh_from_db()
         self.assertEqual((self.portfolio.version, self.portfolio.descripcion), (2, winner["descripcion"]))
 
+    def test_two_creates_after_available_name_still_enforce_owner_uniqueness(self):
+        checked = Barrier(2)
+
+        def create(index):
+            api = APIClient()
+            api.force_authenticate(self.users[0])
+            response = api.get("/api/portafolios/validar-nombre/", {"nombre": "Concurrente"})
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.data["disponible"])
+            checked.wait(timeout=10)
+            return api.post("/api/portafolios/", {"nombre": "Concurrente"}, format="json").status_code
+
+        self.assertEqual(sorted(self.together(create)), [201, 400])
+        self.assertEqual(Portafolio.objects.filter(usuario=self.users[0], nombre="Concurrente").count(), 1)
+
     def test_simultaneous_position_additions_do_not_exceed_two_active(self):
         _, self.portfolio = agregar_posicion(self.users[0], self.portfolio.pk, 1, self.data())
 

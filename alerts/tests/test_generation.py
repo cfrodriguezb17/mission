@@ -133,7 +133,7 @@ class GenerationTests(TestCase):
         self.generate(index)
         self.assertTrue(Alerta.objects.get().detalle["evidencia"]["cotizaciones"][0]["es_simulado"])
 
-    def test_recovery_command_uses_latest_and_is_idempotent(self):
+    def test_recovery_command_processes_pending_and_is_idempotent(self):
         self.index(20)
         call_command("generar_alertas", paises=["co"], stdout=StringIO())
         self.assertEqual(Alerta.objects.count(), 1)

@@ -2,9 +2,11 @@ from io import StringIO
 import json
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.db import DatabaseError
 from django.test import LiveServerTestCase
 
 class RiskHTTPTests(LiveServerTestCase):
@@ -47,3 +49,12 @@ class RiskHTTPTests(LiveServerTestCase):
         self.assertEqual(data["historico"]["count"], 1)
         status, data = self.request("/api/riesgo/CO/historico/?fecha_inicio=invalid", token=token)
         self.assertEqual(status, 400)
+
+    def test_failed_recalculation_over_http_has_safe_503_envelope(self):
+        with patch("risk.services.calcular_pais", side_effect=DatabaseError("diagnostico-privado")):
+            status, data = self.request("/api/riesgo/calcular/", {"paises": ["CO"]}, token=self.login())
+        self.assertEqual(status, 503)
+        self.assertEqual(data["error"]["codigo"], "servicio_no_disponible")
+        self.assertEqual(data["error"]["detalles"]["errores"], data["errores"])
+        self.assertEqual(data["calculados"], [])
+        self.assertNotIn("diagnostico-privado", json.dumps(data))

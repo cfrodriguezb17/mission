@@ -24,5 +24,5 @@ class Command(BaseCommand):
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(json.dumps(result, ensure_ascii=False))
-        if result["errores"] or result.get("riesgos", {}).get("errores") or result.get("alertas", {}).get("errores") or result.get("auditoria_pendiente"):
+        if result["errores"] or result.get("riesgos", {}).get("errores") or result.get("alertas", {}).get("errores") or result.get("alertas_pendientes") or result.get("auditoria_pendiente"):
             raise CommandError("Sincronización parcial: consulte los errores y reintente los países pendientes.")

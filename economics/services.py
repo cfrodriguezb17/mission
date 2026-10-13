@@ -1,10 +1,12 @@
 """Persistencia acotada por país/par; llamadas HTTP fuera de transacciones."""
 import logging
+import hashlib
+import json
 import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from countries.models import Moneda, Pais
@@ -13,7 +15,7 @@ from integrations.http import JsonClient, ProviderError
 from integrations.world_bank import WorldBankClient
 
 from .catalog import COUNTRY_CODES, INDICATORS
-from .models import IndicadorEconomico, TipoCambio, TipoIndicador
+from .models import IndicadorEconomico, LoteActualizacion, TipoCambio, TipoIndicador
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,24 @@ def _log(event, result):
     logger.info(event, extra={"sincronizacion": result})
 
 
-def _error(result, pais, message):
+def _error(result, pais, message, *, tipo_error=None):
     result["errores"].append({"pais": pais, "mensaje": message})
-    logger.error("Fallo de sincronización", extra={"pais": pais, "motivo": message})
+    logger.error("Fallo de sincronización", extra={"pais": pais, "motivo": message, "tipo_error": tipo_error})
+
+
+def registrar_actualizacion(pais_id, datos):
+    """Invocar dentro de la transacción del cambio; economics no depende de alerts.
+
+    La evidencia cambiaria incluye (id, revision): reintentos reutilizan el lote
+    y escrituras distintas siguen siendo distintas aunque repitan una tasa.
+    """
+    if not datos:
+        return
+    datos = sorted(datos, key=lambda item: json.dumps(item, sort_keys=True))
+    payload = json.dumps({"pais": pais_id, "datos": datos}, sort_keys=True,
+                         ensure_ascii=False, separators=(",", ":"))
+    key = hashlib.sha256(payload.encode()).hexdigest()
+    return LoteActualizacion.objects.get_or_create(clave_evento=key, defaults={"pais_id": pais_id, "datos": datos})[0]
 
 
 @transaction.atomic
@@ -86,6 +103,7 @@ def guardar_indicadores(pais, observations, catalog, start, end):
                             for code, _, _, _ in INDICATORS for year in range(start, end + 1)
                             if (code, year) not in present]
     counts["datos_nuevos"] = events
+    registrar_actualizacion(pais.pk, events)
     return counts
 
 
@@ -118,8 +136,11 @@ def sincronizar_indicadores(*, paises=None, anio_inicio=None, anio_fin=None, pre
             result["faltantes"].extend(counts["faltantes"])
             result["datos_nuevos"].extend(counts["datos_nuevos"])
             result["paises_procesados"].append(code)
-        except (ProviderError, ValidationError, IntegrityError) as exc:
+        except ProviderError as exc:
             _error(result, code, str(exc))
+        except (ValidationError, DatabaseError) as exc:
+            _error(result, code, "No se pudieron guardar los indicadores económicos.",
+                   tipo_error=type(exc).__name__)
     result["estado"] = "PARCIAL" if result["errores"] or result["faltantes"] else "COMPLETO"
     result["recalculo_y_alertas_pendientes"] = True
     _log("Fin de sincronización de indicadores", result)
@@ -128,6 +149,10 @@ def sincronizar_indicadores(*, paises=None, anio_inicio=None, anio_fin=None, pre
 
 @transaction.atomic
 def guardar_cotizacion(moneda, fecha, tasa, eventos=None):
+    # Mantener el orden país -> moneda usado por risk; la FK del lote también
+    # participa en los bloqueos. Una moneda compartida produce un lote por país.
+    countries = list(Pais.objects.select_for_update().filter(
+        pk__in=COUNTRY_CODES, activo=True, moneda=moneda).order_by("pk"))
     Moneda.objects.select_for_update().get(pk=moneda.pk)
     value = decimal_campo(tasa, 12)
     if value <= 0:
@@ -141,12 +166,16 @@ def guardar_cotizacion(moneda, fecha, tasa, eventos=None):
     quote.tasa = value
     quote.fuente = "EXCHANGE_RATE"
     quote.es_simulado = False
+    quote.revision += 1
     quote.full_clean()
     quote.save()
+    event = {"tipo": "TIPO_CAMBIO", "id": quote.pk, "moneda_origen": moneda.pk,
+             "moneda_destino": "USD", "tasa": str(quote.tasa), "fecha": fecha.isoformat(), "fuente": quote.fuente,
+             "revision": quote.revision}
+    for country in countries:
+        registrar_actualizacion(country.pk, [{**event, "pais": country.pk}])
     if eventos is not None:
-        eventos.append({"tipo": "TIPO_CAMBIO", "id": quote.pk, "moneda_origen": moneda.pk,
-                       "moneda_destino": "USD", "tasa": str(quote.tasa), "fecha": fecha.isoformat(),
-                       "fuente": quote.fuente})
+        eventos.append(event)
     return "actualizados" if existing else "creados"
 
 
@@ -185,8 +214,10 @@ def actualizar_tipos_cambio(*, client=None):
                 processed.add(pais.moneda_id)
             result["datos_nuevos"].extend({**event, "pais": pais.pk} for event in currency_events[pais.moneda_id])
             result["paises_procesados"].append(pais.pk)
-        except (ProviderError, ValidationError, IntegrityError) as exc:
+        except ProviderError as exc:
             _error(result, pais.pk, str(exc))
+        except (ValidationError, DatabaseError) as exc:
+            _error(result, pais.pk, "No se pudo guardar la cotización.", tipo_error=type(exc).__name__)
     result["fecha"] = date.isoformat()
     result["estado"] = "PARCIAL" if result["errores"] else "COMPLETO"
     result["alertas_pendientes"] = True

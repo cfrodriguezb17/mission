@@ -68,6 +68,9 @@ class TipoCambio(models.Model):
     fecha = models.DateField()
     fuente = models.CharField(max_length=50)
     es_simulado = models.BooleanField(default=False)
+    # Cero identifica registros previos; cada escritura efectiva del proveedor
+    # avanza la revisión bajo el bloqueo de moneda, incluso en transiciones A→B→A.
+    revision = models.PositiveBigIntegerField(default=0, editable=False)
 
     class Meta:
         ordering = ["-fecha", "id"]
@@ -82,3 +85,19 @@ class TipoCambio(models.Model):
 
     def __str__(self):
         return f"{self.moneda_origen_id} → {self.moneda_destino_id} / {self.fecha}"
+
+
+class LoteActualizacion(models.Model):
+    """Evidencia persistente de un cambio económico pendiente de notificación."""
+
+    pais = models.ForeignKey("countries.Pais", on_delete=models.PROTECT, related_name="lotes_actualizacion")
+    clave_evento = models.CharField(max_length=64, unique=True, editable=False)
+    datos = models.JSONField()
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_alerta = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        indexes = [models.Index(fields=["pais", "id"], condition=models.Q(fecha_alerta__isnull=True),
+                               name="lote_pendiente_pais_idx")]
+        constraints = [models.CheckConstraint(condition=~models.Q(datos=[]), name="lote_datos_no_vacios")]

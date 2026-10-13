@@ -63,6 +63,14 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = 'accounts.User'
 
+# Cero ignora X-Forwarded-For. Habilitar solo con una cadena de proxies confiables.
+try:
+    THROTTLE_NUM_PROXIES = int(os.environ.get('DJANGO_NUM_PROXIES', '0'))
+except ValueError as exc:
+    raise ValueError('DJANGO_NUM_PROXIES debe ser un entero mayor o igual a cero.') from exc
+if THROTTLE_NUM_PROXIES < 0:
+    raise ValueError('DJANGO_NUM_PROXIES debe ser un entero mayor o igual a cero.')
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -74,6 +82,7 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.AnonRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {'user': '100/min', 'anon': '20/min'},
+    'NUM_PROXIES': THROTTLE_NUM_PROXIES,
 }
 
 CACHES = {'default': {

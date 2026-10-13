@@ -20,6 +20,14 @@ inactiva revocan el acceso; refresh no rota. Email normalizado a minúsculas.
 Registro/perfil aplican validadores de contraseña (mínimo 6 caracteres, similitud,
 contraseñas comunes y solo numéricas). No se devuelven contraseñas ni hashes.
 
+La actualización del perfil bloquea y vuelve a consultar al usuario antes de
+guardar. Conserva cambios simultáneos de rol/privilegios y solo escribe los
+campos editables enviados. Si la cuenta se desactivó o cambió su contraseña
+después de autenticar la petición, devuelve 401 sin guardar el perfil ni su
+evento de edición; hay que iniciar sesión de nuevo. Dos cambios simultáneos
+de contraseña autenticados con las mismas credenciales no se sobrescriben:
+uno puede completar y el otro se rechaza con 401.
+
 ## Países y datos económicos
 
 | Método | Endpoint | Filtros / permisos |
@@ -70,12 +78,36 @@ caídas superiores a 15 puntos, magnitud cambiaria estrictamente superior a 3 %,
 inflación superior a 50 % y nuevos datos tras sincronización. Clave de evento
 única evita duplicados por la misma evidencia.
 
+Los lotes INFO y el trabajo de alertas de cada índice se guardan junto con sus
+datos económicos o cálculo. Se recuperan después de un fallo, incluso si hay
+índices posteriores o la siguiente sincronización no modifica valores.
+Las respuestas de sincronización/recálculo incluyen
+`alertas={creadas, errores, pendientes}`; `pendientes` suma **índices sin procesar
+y lotes INFO sin entregar** del alcance después de los intentos. Cuenta trabajos,
+no alertas; un índice sin reglas también requiere procesamiento. `errores`
+identifica `pais` y `indice` o `lote`, con mensaje seguro. El cliente debe comprobar
+`alertas_pendientes`, que también considera errores de generación/riesgo.
+Las sincronizaciones reflejan ese flag en `recalculo_y_alertas_pendientes` y
+quedan PARCIAL si resta trabajo. El presupuesto común es 100 trabajos por
+invocación, por antigüedad. El comando `generar_alertas --limite 1000` admite
+1–1000 y recupera ambos tipos sin reenviar evidencia ni ids; `--paises` limita
+selección/conteo, incluidos países inactivos. Emite JSON y sale con error si
+restan trabajos o hay errores. [Política de migración y detalles](alerts/README.md).
+No añade endpoints ni cambia la privacidad de las lecturas.
+
+En actualizaciones cambiarias, cada elemento de `datos_nuevos` incluye
+`revision` (entero) junto al `id` de la cotización. La revisión identifica una
+escritura efectiva y forma parte de la evidencia INFO: tasas A → B → A generan
+tres eventos distintos, aunque compartan par y fecha. Reintentar una entrega
+reutiliza la revisión persistida; una consulta sin cambios no crea otra.
+
 ## Portafolios y posiciones
 
 | Método | Endpoint | Contrato |
 | --- | --- | --- |
 | GET | `/portafolios/` | Propios y públicos; ADMIN consulta todos. `search`, `es_publico`, `propios`, `ordering`, paginación. |
 | POST | `/portafolios/` | ADMIN/ANALISTA; `nombre`, `descripcion` opcional, `es_publico` opcional. |
+| GET | `/portafolios/validar-nombre/` | ADMIN/ANALISTA; `nombre` obligatorio, `excluir` opcional (ID del portafolio a editar); devuelve nombre recortado y disponibilidad. |
 | GET | `/portafolios/{id}/` | Datos, posiciones y resumen. |
 | PUT | `/portafolios/{id}/` | `version` obligatoria más campos a modificar. |
 | DELETE | `/portafolios/{id}/` | `version` obligatoria; eliminación lógica; solo propietario con escritura o ADMIN. |
@@ -92,6 +124,46 @@ Montos entre 1.000 y 10.000.000 USD, dos decimales; fecha de entrada no futura,
 salida estrictamente posterior, notas hasta 200 caracteres. Máximo dos posiciones
 activas por país/tipo en un portafolio y 50.000.000 USD de capital activo.
 MONEDA no se admite para países cuya moneda principal es USD.
+
+### Validación asíncrona del nombre
+
+```http
+GET /api/portafolios/validar-nombre/?nombre=Latam
+Authorization: Bearer <access>
+```
+
+```json
+{"nombre": "Latam", "disponible": true}
+```
+
+`nombre` usa la misma validación que crear/editar: se recortan espacios extremos
+y luego se exige longitud 3–100. La comparación distingue mayúsculas (`Latam`
+y `latam` son diferentes). Un nombre ocupado devuelve 200 con `disponible: false`,
+incluidos los portafolios eliminados. Sin `excluir`, consulta solo al propietario
+autenticado; otros usuarios pueden usar ese mismo nombre.
+
+Al editar, enviar `?nombre=Latam&excluir=42`. `excluir` debe ser un entero positivo
+que identifique un portafolio activo editable por el actor. Se omite únicamente
+ese registro y se usa su propietario real, también al editar un público ajeno o
+cuando ADMIN edita un privado ajeno. El resultado solo comunica disponibilidad;
+no devuelve datos del portafolio que ocupa el nombre.
+
+Solo se admiten los parámetros `nombre` y `excluir`; no hay selección libre de
+usuario/propietario. Entrada inválida o parámetros desconocidos: 400 con el
+sobre de errores habitual; sin JWT: 401; VIEWER: 403 para un alcance visible;
+ID inexistente, eliminado o privado ajeno no accesible: 404.
+La consulta no crea registros, no cambia versiones y responde con
+`Cache-Control: private, no-store`. Aplica el límite general de solicitudes.
+
+Contrato para el formulario: consultar después de la validación local y una
+pausa breve al escribir; cancelar o descartar respuestas de nombres anteriores.
+En edición enviar siempre el ID original como `excluir`. Mostrar duplicado solo
+si responde 200 con `disponible: false`; un fallo de red, 401/403/404 o 429 no
+equivale a nombre libre. La consulta **no reserva** el nombre: POST/PUT mantienen
+validación y restricción única, y pueden devolver 400 en `nombre` si otra petición
+ocupa el nombre antes de guardar. Conservar también el tratamiento de versión 409.
+El frontend actual aún no implementa el formulario; este contrato permite su
+integración sin inferir unicidad desde el listado de portafolios activos.
 
 Toda modificación envía la versión del portafolio; posiciones comparten esa
 versión. Un éxito la incrementa. Conflicto devuelve 409; recargar y revisar antes
@@ -139,11 +211,27 @@ conservan además los campos de validación originales al nivel superior:
 
 Códigos HTTP principales: 400 validación, 401 autenticación, 403 permisos,
 404 recurso inexistente/no visible, 405 método, 409 versión, 429 límite y
-500 error interno sin información sensible. Throttling DRF: 100/min por usuario
+500 error interno sin información sensible. Sincronización y recálculo devuelven
+503 `servicio_no_disponible` si hay errores y no se procesó ningún país/cálculo.
+Conservan los campos del resultado de la tarea y añaden el mismo sobre `error`;
+`error.detalles.errores` contiene los errores seguros por país. Si se procesó
+parte del lote, devuelven 200 con sus resultados y errores: el cliente debe revisar
+`errores`, las etapas pendientes y, en sincronización, `estado` y `faltantes`.
+Un resultado vacío sin errores conserva 200. Los errores de persistencia se
+traducen a mensajes seguros en español, sin publicar nombres de tablas,
+restricciones, SQL ni textos originales de excepciones de la base de datos.
+
+Throttling DRF: 100/min por usuario
 y 20/min por IP anónima; 429 conserva `Retry-After`. La caché local de desarrollo
 es en memoria; producción usa archivo compartido entre workers de una instancia.
 Los contadores DRF son aproximados ante concurrencia; múltiples instancias
 necesitan una caché centralizada para compartir el límite.
+
+Por defecto `DJANGO_NUM_PROXIES=0`: la identidad anónima usa `REMOTE_ADDR` e
+ignora `X-Forwarded-For`. Alterar esa cabecera no reinicia el contador. Detrás
+de proxies confiables, configurar el número real de saltos, sanear cabeceras
+y restringir el acceso directo según la [guía de despliegue](deployment/README.md).
+Esta opción es independiente de `DJANGO_TRUST_PROXY`, que configura HTTPS.
 
 CORS admite exclusivamente `CORS_ALLOWED_ORIGINS` en `/api/`, soporta preflight
 y expone Content-Disposition/Retry-After. Logs JSON registran método, ruta sin

@@ -14,21 +14,30 @@ class VersionSerializer(EntradaEstricta):
     })
 
 
-class CrearPortafolioSerializer(EntradaEstricta):
-    nombre = serializers.CharField(min_length=3, max_length=100, error_messages={
+def campo_nombre_portafolio(*, required=True):
+    return serializers.CharField(min_length=3, max_length=100, required=required, trim_whitespace=True, error_messages={
         "required": "El nombre es obligatorio.", "blank": "El nombre es obligatorio.",
         "min_length": "El nombre debe tener al menos 3 caracteres.", "max_length": "El nombre no puede superar 100 caracteres.",
     })
+
+
+class ValidarNombrePortafolioSerializer(EntradaEstricta):
+    nombre = campo_nombre_portafolio()
+    excluir = serializers.IntegerField(min_value=1, required=False, error_messages={
+        "invalid": "Envíe el ID entero positivo del portafolio a editar.",
+        "min_value": "Envíe el ID entero positivo del portafolio a editar.",
+    })
+
+
+class CrearPortafolioSerializer(EntradaEstricta):
+    nombre = campo_nombre_portafolio()
     descripcion = serializers.CharField(max_length=500, allow_blank=True, required=False, default="",
                                         error_messages={"max_length": "La descripción no puede superar 500 caracteres."})
     es_publico = serializers.BooleanField(required=False, default=False)
 
 
 class EditarPortafolioSerializer(VersionSerializer):
-    nombre = serializers.CharField(min_length=3, max_length=100, required=False, error_messages={
-        "blank": "El nombre es obligatorio.", "min_length": "El nombre debe tener al menos 3 caracteres.",
-        "max_length": "El nombre no puede superar 100 caracteres.",
-    })
+    nombre = campo_nombre_portafolio(required=False)
     descripcion = serializers.CharField(max_length=500, allow_blank=True, required=False,
                                         error_messages={"max_length": "La descripción no puede superar 500 caracteres."})
     es_publico = serializers.BooleanField(required=False)

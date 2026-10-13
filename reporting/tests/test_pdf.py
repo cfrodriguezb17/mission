@@ -39,6 +39,41 @@ class PDFTests(PortfolioTestCase):
         self.assertEqual(self.api.get(self.url(self.private)).status_code, 404)
         self.assertEqual(LogActividad.objects.filter(accion="EXPORT").count(), 1)
 
+    def test_explicit_pdf_accept_returns_download(self):
+        for accept in ("application/pdf", "*/*", "application/json"):
+            with self.subTest(accept=accept):
+                response = self.api.get(self.url(), HTTP_ACCEPT=accept)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], "application/pdf")
+                self.assertEqual(response["Cache-Control"], "private, no-store")
+                self.assertIn("attachment", response["Content-Disposition"])
+                self.assertIn("Compartido", self.text(response))
+
+    def test_pdf_accept_preserves_json_errors_and_permissions(self):
+        self.api.force_authenticate(None)
+        unauthorized = self.api.get(self.url(), HTTP_ACCEPT="application/pdf")
+        self.api.force_authenticate(self.viewer)
+        hidden = self.api.get(self.url(self.private), HTTP_ACCEPT="application/pdf")
+        unsupported_method = self.api.post(self.url(), {}, format="json", HTTP_ACCEPT="application/pdf")
+        for response, status, code in ((unauthorized, 401, "autenticacion"),
+                                       (hidden, 404, "no_encontrado"),
+                                       (unsupported_method, 405, "metodo_no_permitido")):
+            with self.subTest(status=status):
+                self.assertEqual(response.status_code, status)
+                self.assertEqual(response["Content-Type"], "application/json")
+                self.assertEqual(response.json()["error"]["codigo"], code)
+        self.assertFalse(LogActividad.objects.filter(accion="EXPORT").exists())
+
+    def test_pdf_accept_metadata_and_unsupported_format(self):
+        response = self.api.options(self.url(), HTTP_ACCEPT="application/pdf")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertIn("application/pdf", response.json()["renders"])
+        response = self.api.get(self.url(), HTTP_ACCEPT="application/xml")
+        self.assertEqual(response.status_code, 406)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertEqual(response.json()["error"]["codigo"], "formato_no_admitido")
+
     def test_admin_can_export_private_and_deleted_portfolio_is_unavailable(self):
         self.api.force_authenticate(self.admin)
         self.assertEqual(self.api.get(self.url(self.private)).status_code, 200)
@@ -78,8 +113,9 @@ class PDFTests(PortfolioTestCase):
 
     def test_failed_generation_does_not_record_successful_export_or_expose_exception(self):
         with patch("reporting.views.generar_pdf", side_effect=RuntimeError("contraseña-secreta")):
-            response = self.api.get(self.url())
+            response = self.api.get(self.url(), HTTP_ACCEPT="application/pdf")
         self.assertEqual(response.status_code, 500)
+        self.assertEqual(response["Content-Type"], "application/json")
         self.assertNotIn("contraseña-secreta", str(response.content))
         self.assertFalse(LogActividad.objects.filter(accion="EXPORT").exists())
 

@@ -82,22 +82,33 @@ class UserSerializer(serializers.ModelSerializer):
             raise
 
     def update(self, instance, validated_data):
-        password = validated_data.pop("password", None)
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
-        if password is not None:
-            instance.set_password(password)
+        data = dict(validated_data)
+        password = data.pop("password", None)
         try:
             with transaction.atomic():
-                instance.save()
-                registrar_actividad(usuario=instance, accion="EDITAR", entidad="Usuario", entidad_id=instance.pk,
-                                    detalle={"operacion": "perfil", "campos": sorted(validated_data),
+                try:
+                    current = User.objects.select_for_update().get(pk=instance.pk)
+                except User.DoesNotExist as exc:
+                    raise AuthenticationFailed("El usuario ya no existe.") from exc
+                # request.user se leyó al autenticar; revalidar tras adquirir el bloqueo.
+                if not current.is_active or current.password != instance.password:
+                    raise AuthenticationFailed("La cuenta o la contraseña ha cambiado. Inicia sesión de nuevo.")
+                for field, value in data.items():
+                    setattr(current, field, value)
+                fields = list(data)
+                if password is not None:
+                    current.set_password(password)
+                    fields.append("password")
+                # No escribir rol, activación ni privilegios desde la copia anterior.
+                current.save(update_fields=fields)
+                registrar_actividad(usuario=current, accion="EDITAR", entidad="Usuario", entidad_id=current.pk,
+                                    detalle={"operacion": "perfil", "campos": sorted(data),
                                              "credenciales_actualizadas": password is not None},
                                     ip=obtener_ip(self.context.get("request")))
         except IntegrityError:
-            self.validate_email(instance.email)
+            self.validate_email(data.get("email", instance.email))
             raise
-        return instance
+        return current
 
 
 class ProfileSerializer(UserSerializer):

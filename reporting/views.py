@@ -2,16 +2,20 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework.renderers import JSONRenderer
 from rest_framework.views import APIView
 
 from audit.services import obtener_ip, registrar_actividad
 from portfolios.selectors import portafolios_visibles, resumen_portafolio
 from risk.selectors import ultimos_indices
 
+from .renderers import PDFDownloadRenderer
 from .services import generar_pdf
 
 
 class ExportPDFView(APIView):
+    renderer_classes = [JSONRenderer, PDFDownloadRenderer]
+
     def get(self, request, pk):
         # Las escrituras de posiciones usan el mismo bloqueo; capturar una sola versión.
         with transaction.atomic():

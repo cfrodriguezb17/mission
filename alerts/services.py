@@ -10,8 +10,11 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from countries.models import Pais
+from economics.models import LoteActualizacion
+from economics.services import registrar_actualizacion
 from risk.models import IndiceRiesgo
 from audit.services import registrar_actividad
 
@@ -54,8 +57,13 @@ def crear_evento(pais, rule, evidence, tipo, severidad, titulo, mensaje, usuario
 
 @transaction.atomic
 def generar_para_indice(index_id):
-    index = IndiceRiesgo.objects.get(pk=index_id)
-    pais = Pais.objects.select_for_update().get(pk=index.pais_id)
+    code = IndiceRiesgo.objects.values_list("pais_id", flat=True).get(pk=index_id)
+    # Igual que el productor: país antes del índice. Se relee el marcador
+    # después del bloqueo para que un segundo trabajador no lo procese otra vez.
+    pais = Pais.objects.select_for_update().get(pk=code)
+    index = IndiceRiesgo.objects.select_for_update().get(pk=index_id)
+    if index.fecha_alertas_procesadas is not None:
+        return 0
     previous = IndiceRiesgo.objects.filter(pais=pais).filter(
         # timestamp + id reproduce el orden utilizado por el ranking.
         Q(fecha_calculo__lt=index.fecha_calculo) | Q(fecha_calculo=index.fecha_calculo, pk__lt=index.pk)
@@ -91,30 +99,78 @@ def generar_para_indice(index_id):
                 created += crear_evento(pais, "VARIACION_CAMBIARIA", {"actual": current, "anterior": prior,
                     "variacion_porcentual": str(variation)}, "TIPO_CAMBIO", "WARNING",
                     "Variación cambiaria superior al 3 %", f"Variación diaria de {pais.nombre}: {variation:.6f} %.")
+    # También se confirma cuando ninguna regla se activa. Un fallo en cualquier
+    # regla o al guardar este marcador revierte todos los eventos del índice.
+    index.fecha_alertas_procesadas = timezone.now()
+    index.save(update_fields=["fecha_alertas_procesadas"])
     return created
 
 
-def generar_alertas(indices=(), datos_nuevos=()):
+@transaction.atomic
+def generar_para_lote(lote_id, pais_id):
+    # Mismo orden que el productor: país antes del lote. El marcador se guarda
+    # junto a la alerta, evitando pérdidas o duplicados al fallar o competir.
+    pais = Pais.objects.select_for_update().get(pk=pais_id)
+    lote = LoteActualizacion.objects.select_for_update().get(pk=lote_id)
+    if lote.fecha_alerta is not None:
+        return 0
+    # La revisión de la cotización permanece en la evidencia que crear_evento
+    # incluye en el hash de Alerta, además del hash del propio lote.
+    created = crear_evento(pais, "DATOS_NUEVOS", {"datos": lote.datos},
+        "TIPO_CAMBIO" if all(item["tipo"] == "TIPO_CAMBIO" for item in lote.datos) else "INDICADOR",
+        "INFO", "Datos actualizados", f"Se sincronizaron {len(lote.datos)} datos nuevos de {pais.nombre}.")
+    lote.fecha_alerta = timezone.now()
+    lote.save(update_fields=["fecha_alerta"])
+    return created
+
+
+def generar_alertas(indices=(), datos_nuevos=(), *, paises=None, limite=100):
+    if type(limite) is not int or not 1 <= limite <= 1000:
+        raise ValueError("El límite de trabajos debe estar entre 1 y 1000.")
+    # Materializar para reutilizar un filtro iterable durante selección y conteo.
+    paises = set(paises) if paises is not None else None
     result = {"creadas": 0, "errores": []}
+    # Compatibilidad con referencias explícitas de workflows existentes. No
+    # eluden el límite ni restringen la recuperación a los índices más nuevos.
     for item in indices:
-        try:
-            result["creadas"] += generar_para_indice(item["id"])
-        except (IndiceRiesgo.DoesNotExist, Pais.DoesNotExist, DatabaseError, ValidationError):
-            logger.error("No se pudieron generar alertas de riesgo", extra={"pais": item["pais"]})
-            result["errores"].append({"pais": item["pais"], "mensaje": "No se pudieron generar alertas de riesgo."})
+        if paises is not None and item["pais"] not in paises:
+            continue
+        if not IndiceRiesgo.objects.filter(pk=item["id"], pais_id=item["pais"]).exists():
+            result["errores"].append({"pais": item["pais"], "indice": item["id"],
+                                      "mensaje": "Índice de riesgo no encontrado."})
     grouped = {}
     for item in datos_nuevos:
         grouped.setdefault(item["pais"], []).append(item)
     for code, events in grouped.items():
         try:
             with transaction.atomic():
-                pais = Pais.objects.select_for_update().get(pk=code)
-                events = sorted(events, key=lambda item: json.dumps(item, sort_keys=True))
-                result["creadas"] += crear_evento(pais, "DATOS_NUEVOS", {"datos": events},
-                    "TIPO_CAMBIO" if all(item["tipo"] == "TIPO_CAMBIO" for item in events) else "INDICADOR",
-                    "INFO", "Datos actualizados", f"Se sincronizaron {len(events)} datos nuevos de {pais.nombre}.")
+                Pais.objects.select_for_update().get(pk=code)
+                registrar_actualizacion(code, events)
         except (Pais.DoesNotExist, DatabaseError, ValidationError):
-            logger.error("No se pudo generar alerta de sincronización", extra={"pais": code})
-            result["errores"].append({"pais": code, "mensaje": "No se pudo generar alerta de sincronización."})
+            logger.error("No se pudo registrar el lote de sincronización", extra={"pais": code})
+            result["errores"].append({"pais": code, "mensaje": "No se pudo registrar el lote de sincronización."})
+    pending = LoteActualizacion.objects.filter(fecha_alerta__isnull=True)
+    pending_indices = IndiceRiesgo.objects.filter(fecha_alertas_procesadas__isnull=True)
+    if paises is not None:
+        pending = pending.filter(pais_id__in=paises)
+        pending_indices = pending_indices.filter(pais_id__in=paises)
+    # Un presupuesto común para ambos tipos, por antigüedad y desempate estable.
+    # Basta tomar limite candidatos de cada cola; los demás no pueden entrar
+    # en los primeros limite del conjunto.
+    candidates = [(stamp, "indice", pk, code) for stamp, pk, code in
+                  pending_indices.order_by("fecha_calculo", "pk").values_list("fecha_calculo", "pk", "pais_id")[:limite]]
+    candidates += [(stamp, "lote", pk, code) for stamp, pk, code in
+                   pending.order_by("fecha_creacion", "pk").values_list("fecha_creacion", "pk", "pais_id")[:limite]]
+    for _, kind, job_id, code in sorted(candidates)[:limite]:
+        try:
+            result["creadas"] += (generar_para_indice(job_id) if kind == "indice"
+                                  else generar_para_lote(job_id, code))
+        except (Pais.DoesNotExist, IndiceRiesgo.DoesNotExist, LoteActualizacion.DoesNotExist,
+                DatabaseError, ValidationError):
+            message = ("No se pudieron generar alertas de riesgo." if kind == "indice"
+                       else "No se pudo generar alerta de sincronización.")
+            logger.error(message, extra={"pais": code})
+            result["errores"].append({"pais": code, kind: job_id, "mensaje": message})
+    result["pendientes"] = pending.count() + pending_indices.count()
     logger.info("Generación de alertas", extra={"sincronizacion": result})
     return result

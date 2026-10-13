@@ -16,10 +16,11 @@ from .serializers import (
     CerrarPosicionSerializer, CrearPortafolioSerializer, CrearPosicionSerializer,
     EditarPortafolioSerializer, EditarPosicionSerializer, PortafolioDetailSerializer,
     PortafolioFilterSerializer, PortafolioSerializer, PosicionSerializer, VersionSerializer,
+    ValidarNombrePortafolioSerializer,
 )
 from .services import (
     agregar_posicion, cerrar_posicion, crear_portafolio, editar_portafolio,
-    editar_posicion, eliminar_portafolio,
+    editar_posicion, eliminar_portafolio, validar_nombre_portafolio,
 )
 
 
@@ -32,6 +33,17 @@ def entrada(serializer_class, request):
 def visible(request, pk, bloquear=False):
     queryset = portafolios_visibles(request.user)
     return get_object_or_404(queryset.select_for_update() if bloquear else queryset, pk=pk)
+
+
+class ValidarNombrePortafolioView(APIView):
+    def get(self, request):
+        # Conservar excluir vacío como entrada inválida, no como campo omitido de HTML.
+        serializer = ValidarNombrePortafolioSerializer(data=request.query_params.dict())
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        disponible = validar_nombre_portafolio(request.user, **data)
+        return Response({"nombre": data["nombre"], "disponible": disponible},
+                        headers={"Cache-Control": "private, no-store"})
 
 
 class PortafolioListView(ConsultaAuditadaMixin, generics.ListAPIView):

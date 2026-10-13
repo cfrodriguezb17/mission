@@ -42,7 +42,7 @@ usan `Decimal`, nunca coma flotante para persistencia monetaria.
 | countries | Pais | PK codigo_iso (2 caracteres); FK moneda → Moneda | nombre, region, latitud, longitud, poblacion, bandera_url, activo |
 | economics | TipoIndicador | PK codigo | nombre, unidad, codigo_world_bank (UQ) |
 | economics | IndicadorEconomico | PK id; FK pais → Pais; FK tipo → TipoIndicador; UQ (pais, tipo, anio) | valor, anio, fuente, es_simulado, fecha_actualizacion |
-| economics | TipoCambio | PK id; FK moneda_origen → Moneda; FK moneda_destino → Moneda; UQ (moneda_origen, moneda_destino, fecha) | tasa, fecha, fuente, es_simulado |
+| economics | TipoCambio | PK id; FK moneda_origen → Moneda; FK moneda_destino → Moneda; UQ (moneda_origen, moneda_destino, fecha) | tasa, fecha, fuente, es_simulado, revision |
 | portfolios | Portafolio | PK id; FK usuario → Usuario; UQ (usuario, nombre) | nombre, descripcion, fecha_creacion, fecha_modificacion, activo, es_publico, version |
 | portfolios | Posicion | PK id; FK portafolio → Portafolio; FK pais → Pais | tipo_activo, monto_inversion_usd, fecha_entrada, fecha_salida nullable, notas |
 | risk | IndiceRiesgo | PK id; FK pais → Pais | fecha_calculo, score_economico, score_cambiario, score_estabilidad, indice_compuesto, version_formula, detalle_calculo JSON |
@@ -221,6 +221,39 @@ erDiagram
 ```
 
 ## Compatibilidad con el enunciado
+
+### Almacenamiento técnico para recuperación de alertas
+
+Las doce entidades de negocio del diagrama se complementan con
+`economics.LoteActualizacion`, incorporada por `economics.0003_lotes_actualizacion`.
+Cada lote contiene `id` (PK), `pais` (FK PROTECT), `clave_evento` única SHA-256,
+`datos` (JSON de evidencia original no vacía), `fecha_creacion` y `fecha_alerta`
+nullable. Un índice parcial (pais, id) cubre lotes pendientes. Es evidencia de
+entrega, no otra copia mutable del indicador ni un campo `leida` compartido.
+
+Se registra con la transacción del cambio económico. Alerts crea su alerta y
+marca el lote entregado en una sola transacción; fallos y recuperaciones
+concurrentes conservan idempotencia. El administrador permite únicamente
+consulta. No se migran ni inventan eventos anteriores a esta mejora.
+
+`economics.0004_tipo_cambio_revision` añade a TipoCambio una revisión entera no
+negativa, inicialmente cero para cotizaciones existentes. Cada escritura
+efectiva mediante `guardar_cotizacion` la incrementa dentro de la transacción
+económica y la copia a la evidencia del lote; su hash y el de Alerta incluyen
+esa revisión. Volver a una tasa anterior conserva una identidad diferente,
+mientras los reintentos reutilizan la evidencia persistida. La migración no
+modifica lotes ni alertas anteriores ni genera notificaciones retrospectivas.
+
+`risk.0002_indice_alertas_procesadas` añade a IndiceRiesgo el marcador técnico
+`fecha_alertas_procesadas`, nullable, no editable. NULL identifica trabajo
+pendiente desde la misma inserción del cálculo. Un índice parcial por
+(fecha_calculo, id) cubre su recuperación. Alerts confirma eventos y marcador
+en una transacción bajo bloqueo país → índice, incluso sin reglas activadas.
+La migración conserva índices y alertas; solo el último índice previo por país
+(fecha/id, incluidos inactivos) queda pendiente. Los demás se marcan con fecha
+de migración como excluidos de revisión retrospectiva, sin afirmar que tuvieron
+entrega. Todos los cálculos posteriores quedan recuperables. Detalles en
+[alerts](alerts/README.md).
 
 Los nombres y campos de la API pueden conservarse aunque cambie el almacenamiento:
 `moneda_codigo` y `moneda_nombre` proceden de Moneda; `tipo` y `unidad` del catálogo;

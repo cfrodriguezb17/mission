@@ -18,12 +18,17 @@ class IndiceRiesgo(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)])
     version_formula = models.CharField(max_length=100)
     detalle_calculo = models.JSONField()
+    # NULL conserva el trabajo pendiente junto al cálculo, incluso sin reglas.
+    fecha_alertas_procesadas = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         ordering = ["-fecha_calculo", "-id"]
         verbose_name = "índice de riesgo"
         verbose_name_plural = "índices de riesgo"
-        indexes = [models.Index(fields=["pais", "fecha_calculo"], name="riesgo_pais_fecha_idx")]
+        indexes = [models.Index(fields=["pais", "fecha_calculo"], name="riesgo_pais_fecha_idx"),
+                   models.Index(fields=["fecha_calculo", "id"],
+                                condition=models.Q(fecha_alertas_procesadas__isnull=True),
+                                name="riesgo_alertas_pendientes_idx")]
         constraints = [
             models.CheckConstraint(condition=models.Q(**{f"{field}__gte": 0, f"{field}__lte": 100}),
                                    name=f"riesgo_{field}_rango")

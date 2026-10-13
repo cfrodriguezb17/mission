@@ -56,3 +56,20 @@ class PortfolioHTTPTests(LiveServerTestCase):
         self.assertEqual(self.request(path, "DELETE", {"version": 4}, tokens[0])[0], 204)
         self.assertFalse(Portafolio.objects.get(pk=created["id"]).activo)
         self.assertEqual(Posicion.objects.count(), 1)
+
+    def test_name_validation_with_real_jwt_and_query_parameters(self):
+        path = "/api/portafolios/validar-nombre/?nombre=%20Latam%20"
+        self.assertEqual(self.request(path)[0], 401)
+        status, login = self.request("/api/auth/login/", "POST", {
+            "email": self.users[0].email, "password": "TemporalClave!842z",
+        })
+        self.assertEqual(status, 200)
+        token = login["access"]
+        self.assertEqual(self.request(path, token=token), (200, {"nombre": "Latam", "disponible": True}))
+        portfolio = Portafolio.objects.create(usuario=self.users[0], nombre="Latam")
+        self.assertEqual(self.request(path, token=token), (200, {"nombre": "Latam", "disponible": False}))
+        self.assertEqual(self.request(path + f"&excluir={portfolio.pk}", token=token),
+                         (200, {"nombre": "Latam", "disponible": True}))
+        status, error = self.request(path + "&usuario=999", token=token)
+        self.assertEqual(status, 400)
+        self.assertIn("usuario", error["error"]["detalles"])

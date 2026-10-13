@@ -7,5 +7,6 @@ class DocumentationTests(SimpleTestCase):
         response = APIClient().get("/api/docs/")
         self.assertEqual(response.status_code, 200)
         text = response.data["contenido"]
-        for endpoint in ("/dashboard/resumen/", "/dashboard/mapa/", "/dashboard/tendencias/", "/portafolios/{id}/export/pdf/"):
+        for endpoint in ("/dashboard/resumen/", "/dashboard/mapa/", "/dashboard/tendencias/", "/portafolios/{id}/export/pdf/",
+                         "/portafolios/validar-nombre/"):
             self.assertIn(endpoint, text)

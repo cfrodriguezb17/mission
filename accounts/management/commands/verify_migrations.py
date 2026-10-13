@@ -111,6 +111,8 @@ class Command(BaseCommand):
                 test_labels = [
                     "accounts.tests.test_models", "accounts.tests.test_auth_api",
                     "accounts.tests.test_admin",
+                    "accounts.tests.test_admin_concurrency",
+                    "accounts.tests.test_profile_concurrency",
                     "accounts.tests.test_seed_data",
                     "countries",
                     "economics",

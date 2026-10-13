@@ -13,8 +13,12 @@ de requests y CORS configurable están conectados a la API completa.
 
 Se entrega arranque Gunicorn, WhiteNoise para estáticos, Dockerfile y plantillas
 de tareas programadas. Publicación/URL pública pendiente de proveedor y cuenta.
-REST Countries real pendiente de su clave; el contrato y fallos se prueban con
-respuestas controladas. El frontend y su publicación tienen seguimiento separado.
+REST Countries tiene una [prueba real satisfactoria de los diez países](../docs/backend-audit-20261010/REST_COUNTRIES.md)
+con proveedor autenticado, persistencia en PostgreSQL temporal y lecturas HTTP
+con JWT; la base principal se conservó. Una nueva instalación necesita su propia
+`REST_COUNTRIES_API_KEY` para sincronizar. El frontend conserva su base Angular;
+la implementación e integración de sus formularios y su publicación siguen pendientes.
+Guía conjunta de entrega y Postman en el [README raíz](../README.md).
 
 ## Instalación local reproducible
 
@@ -170,7 +174,9 @@ World Bank y ExchangeRate tienen timeouts, reintentos acotados y fallos parciale
 por país. REST Countries v5 requiere REST_COUNTRIES_API_KEY. Se guardan primero
 datos válidos y workflows coordina recálculo, alertas y auditoría. El endpoint
 ADMIN tiene presupuesto de 25 segundos; el comando de indicadores 180 por defecto.
-Los comandos señalan fallo si quedan etapas pendientes. Simulaciones pueden
+Los comandos señalan fallo si quedan etapas pendientes. Un resultado HTTP 200
+puede ser parcial: revisar `errores`, `estado`, `faltantes` y los flags de etapas,
+no solo el estado HTTP. Simulaciones pueden
 reemplazarse por datos externos; ediciones manuales reales se conservan.
 
 Errores DRF comparten `error.codigo/mensaje/detalles`; se conservan los campos
@@ -179,6 +185,23 @@ método, ruta sin query, actor autenticado, duración y estado, sin cuerpos/toke
 Auditoría registra CRUD, consultas, login, tareas y exportación. Throttling 100/min
 por usuario y 20/min por IP anónima; `Retry-After` en 429. CORS solo permite los
 orígenes configurados. Detalles en [API](API.md) y [common](common/README.md).
+
+Si falla el resumen final de auditoría de una tarea, se conservan los datos
+obtenidos y se informa `auditoria_pendiente=true` y PARCIAL; los comandos terminan
+con error. No hay cola ni reconstrucción automática del resumen perdido. Revisar
+la ejecución antes de repetirla: una repetición registra su propio resultado.
+Las escrituras transaccionales de usuarios/portafolios/lecturas se revierten si
+falla su auditoría. [Alcance y recuperación de auditoría](audit/README.md).
+
+## Colección de Postman
+
+Importar [DataPulse.postman_collection.json](../docs/backend-audit-20261010/DataPulse.postman_collection.json).
+Configurar `base_url=http://127.0.0.1:8000` (sin `/api` ni barra final),
+`password_demo=DataPulse2026!` y una `password_registro` válida. Ejecutar en orden
+en una base de demostración: crea/modifica/elimina registros y consulta World
+Bank real. Los logins guardan tokens por rol. Los ejemplos son capturas históricas;
+las dos consultas B03 documentan creación y edición. El contrato vigente está
+en [API.md](API.md).
 
 ## Pruebas y migraciones
 
@@ -197,16 +220,70 @@ permisos, faltantes, umbrales, concurrencia, PDF y validaciones.
 la elimina al pasar y la conserva ante fallos para diagnóstico. `--fresh` genera
 accounts en un paquete temporal, sin modificar migraciones del repositorio.
 
-Verificación del 8 de octubre de 2026: **245 pruebas globales correctas**, con
-migraciones originales desde cero; **244** con accounts regenerado (se excluye
-la prueba incremental que depende de su historial original). Siete flujos HTTP
-reales y escenarios concurrentes. Bases temporales exitosas eliminadas.
-Configuración Gunicorn y `check --deploy` con variables de producción correctos;
-el PDF de ejemplo se renderizó y revisó visualmente con fuentes incrustadas.
+Última suite global comprobada, **B03 del 10 de octubre de 2026: 325 pruebas
+correctas en PostgreSQL**, sin omisiones, con migraciones originales desde cero,
+regresiones incrementales, concurrencia real y HTTP con JWT. La base temporal se
+eliminó; B03 no modificó la base principal ni requiere migración nueva.
+[Resultado, comandos, versiones y hashes de la implementación](../docs/backend-b03-20261010/README.md).
 
-Conservar migraciones aplicadas y la base principal. La consolidación documental
-preserva las notas anteriores en [historial](docs/HISTORIAL.md); contiene estados
-históricos y no sustituye este README como referencia actual.
+B04 solo consolida documentación. **B05 completó el cierre de calidad local**:
+198 archivos Python, API y Postman coinciden con B03 por SHA-256; revisión de
+permisos, errores, PDF y contratos correcta, PostgreSQL sin migraciones pendientes
+y sin cambios de modelos. Se conserva aquella suite sin repetirla; pasó una
+prueba específica de documentación pública sin utilizar la base. No se aplicaron
+migraciones ni se modificaron datos durante B05.
+[Versión revisada y evidencia de cierre](../docs/backend-b05-20261010/README.md).
+Resultados anteriores (245, 254, 267, 271, 285 y 308 pruebas) y la comprobación
+inicial B01 de 51 casos SQLite se conservan en el
+[historial de verificaciones](docs/VERIFICACIONES_HISTORICAS.md).
+Las reproducciones de la revisión previa afirman los defectos originales;
+las regresiones permanentes incluidas en B02/B03 afirman su corrección.
+
+## Cambios B01–B03 y actualización de instalaciones
+
+| Cambio | Comportamiento vigente | Migración |
+| --- | --- | --- |
+| B01 | `TipoCambio.revision` identifica cada escritura efectiva, incluido A → B → A. Cotización y lote se confirman juntos; los reintentos no duplican INFO y una consulta sin cambios no genera otro evento. | `economics.0004_tipo_cambio_revision`, después de `0003_lotes_actualizacion`. |
+| B02 | Cada índice conserva `fecha_alertas_procesadas`; el recuperador atiende históricos pendientes y confirma alertas/marcador juntos, también si no hay reglas activadas. | `risk.0002_indice_alertas_procesadas`. |
+| B03 | Consulta JWT `GET /api/portafolios/validar-nombre/?nombre=Latam`, con `excluir=<id>` al editar, sin reservar nombres. | No requiere migración. |
+
+Ambas migraciones B01/B02 **ya se aplicaron a la base principal local** el
+10 de octubre: 734 filas en 21 tablas conservaron los valores de sus columnas
+anteriores; no quedaron migraciones pendientes en esa verificación.
+[Evidencia de aplicación](../docs/backend-b02-20261010/main-database/README.md).
+En otra instalación, conservar el historial y ejecutar `python manage.py migrate`.
+Detener productores/recuperadores durante la actualización y reanudarlos con el
+código nuevo tras migrar.
+
+El corte B02 deja pendiente solo el último índice previo de cada país, incluidos
+inactivos. Los anteriores se excluyen de revisión retrospectiva; el marcador no
+acredita una entrega antigua. Los índices nuevos siguen recuperables aunque haya
+cálculos posteriores. No se reconstruyen automáticamente eventos perdidos antes
+del corte. [Evidencia B01/B02](../docs/backend-b02-20261010/README.md).
+
+```bash
+python manage.py generar_alertas --limite 1000
+python manage.py generar_alertas --paises CO BR --limite 100
+```
+
+`--limite` admite 1–1000 (100 por defecto) y es conjunto para índices y lotes
+INFO, por antigüedad. `pendientes` cuenta ambos tipos dentro del filtro, no el
+número de notificaciones. El comando imprime `{creadas, errores, pendientes}`;
+si hay errores o pendientes termina con salida distinta de cero. Revisar la
+causa y repetir hasta vaciar el alcance. Los workflows exponen
+`alertas.pendientes`, `alertas_pendientes` y, en sincronización,
+`recalculo_y_alertas_pendientes`. [Contrato de recuperación](alerts/README.md).
+
+B03 comparte longitud 3–100, recorte y comparación con distinción de mayúsculas
+con POST/PUT. Incluye nombres reservados por portafolios eliminados; al editar
+consulta al propietario real y verifica permisos. Devuelve 200 con
+`{nombre, disponible}` para nombres válidos, incluso ocupados. La restricción al
+guardar resuelve colisiones posteriores. [Contrato frontend](API.md#validación-asíncrona-del-nombre).
+La integración del formulario Angular sigue pendiente.
+
+Conservar migraciones aplicadas y la base principal. Las notas de construcción
+por módulos se mantienen como [historial](docs/HISTORIAL.md), con estados
+anteriores identificados por fecha.
 
 ## Despliegue
 

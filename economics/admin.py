@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from audit.admin_mixins import AdminAuditadoMixin
 
-from .models import IndicadorEconomico, TipoCambio, TipoIndicador
+from .models import IndicadorEconomico, LoteActualizacion, TipoCambio, TipoIndicador
 
 
 @admin.register(TipoIndicador)
@@ -26,3 +26,19 @@ class TipoCambioAdmin(AdminAuditadoMixin, admin.ModelAdmin):
     list_filter = ("moneda_origen", "moneda_destino", "fecha", "es_simulado")
     list_select_related = ("moneda_origen", "moneda_destino")
     search_fields = ("moneda_origen__codigo", "moneda_destino__codigo", "fuente")
+
+
+@admin.register(LoteActualizacion)
+class LoteActualizacionAdmin(admin.ModelAdmin):
+    list_display = ("id", "pais", "fecha_creacion", "fecha_alerta")
+    list_filter = ("pais", ("fecha_alerta", admin.EmptyFieldListFilter))
+    readonly_fields = [field.name for field in LoteActualizacion._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

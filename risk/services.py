@@ -50,6 +50,8 @@ def calcular_pais(codigo_iso):
                        or bool(previous and previous.es_simulado) or any(row.es_simulado for row in quotes)})
     index = IndiceRiesgo(pais=pais, fecha_calculo=now, **result)
     index.full_clean()
+    # El marcador pendiente se inserta en esta misma transacción. No depende
+    # de que el workflow alcance luego la etapa de alertas.
     index.save()
     return index
 

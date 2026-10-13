@@ -7,6 +7,11 @@ from risk.selectors import ultimos_indices
 from .models import Portafolio
 
 
+def nombre_disponible(usuario_id, nombre, *, excluir=None):
+    # Los nombres de portafolios eliminados también permanecen reservados.
+    return not Portafolio.objects.filter(usuario_id=usuario_id, nombre=nombre).exclude(pk=excluir).exists()
+
+
 def portafolios_visibles(usuario):
     queryset = Portafolio.objects.filter(activo=True)
     if not usuario.is_active:

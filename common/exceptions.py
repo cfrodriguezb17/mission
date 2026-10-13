@@ -15,6 +15,7 @@ MESSAGES = {
     409: ("conflicto", "Los datos cambiaron. Recargue y revise antes de guardar."),
     415: ("contenido_no_admitido", "El formato del contenido enviado no está permitido."),
     429: ("limite_solicitudes", "Ha superado el límite de solicitudes. Intente más tarde."),
+    503: ("servicio_no_disponible", "No se pudo completar la operación. Intente más tarde."),
 }
 
 
@@ -23,13 +24,18 @@ def error_payload(status, details=None):
     return {"codigo": code, "mensaje": message, "detalles": details or {}}
 
 
+def error_response_data(data, status, *, details=None):
+    """Añadir el contrato común sin modificar ni eliminar los campos existentes."""
+    return {**data, "error": error_payload(status, data if details is None else details)}
+
+
 def exception_handler(exc, context):
     response = drf_exception_handler(exc, context)
     if response is None:
         # Nunca publicar SQL, credenciales, payloads ni textos de excepciones.
         logger.error("Error interno de API", extra={"tipo_error": type(exc).__name__})
-        return Response({"error": error_payload(500)}, status=500)
+        return Response(error_response_data({}, 500), status=500)
     details = response.data
     legacy = dict(details) if isinstance(details, dict) else {"detail": details}
-    response.data = {**legacy, "error": error_payload(response.status_code, details)}
+    response.data = error_response_data(legacy, response.status_code, details=details)
     return response

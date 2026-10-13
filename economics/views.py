@@ -6,7 +6,6 @@ from django.utils import timezone
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from audit.services import obtener_ip
@@ -15,6 +14,7 @@ from audit.mixins import ConsultaAuditadaMixin
 from common.filters import StrictOrderingFilter
 from common.pagination import StandardPagination
 from common.permissions import IsAdminRole
+from common.responses import operation_response
 from common.serializers import DateRangeFilterSerializer as FechaFilterSerializer
 from countries.models import Pais
 
@@ -100,5 +100,4 @@ class SyncIndicadoresView(APIView):
         serializer.is_valid(raise_exception=True)
         result = sincronizar_indicadores(usuario=request.user, ip=obtener_ip(request), **serializer.validated_data,
                                         presupuesto=settings.ECONOMICS_SYNC_BUDGET_SECONDS)
-        status = 503 if result["errores"] and not result["paises_procesados"] else 200
-        return Response(result, status=status)
+        return operation_response(result, completed_key="paises_procesados")

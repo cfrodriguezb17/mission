@@ -26,6 +26,7 @@ Variables de producción:
 | DJANGO_SECURE_SSL_REDIRECT | true |
 | DJANGO_SECURE_HSTS_SECONDS | 31536000 tras verificar HTTPS. |
 | DJANGO_TRUST_PROXY | true solo si el proxy sobrescribe X-Forwarded-Proto. |
+| DJANGO_NUM_PROXIES | Entero >= 0; por defecto 0. Número de proxies confiables para identificar clientes en el límite de solicitudes. |
 | DJANGO_CACHE_LOCATION | Directorio escribible compartido entre workers de esta instancia. |
 | REST_COUNTRIES_API_KEY | Clave v5 para sincronización real de datos generales. |
 | PORT, WEB_CONCURRENCY | Puerto del proveedor y número de workers. |
@@ -36,6 +37,22 @@ estáticos del admin se sirven con WhiteNoise. PostgreSQL sigue siendo persisten
 y externo al contenedor. Para varias instancias, sustituir FileBasedCache por una
 caché compartida central y validar throttling; DRF no garantiza conteos estrictos
 bajo concurrencia. No se considera autenticado un proxy por el simple encabezado.
+
+Con `DJANGO_NUM_PROXIES=0`, DRF usa `REMOTE_ADDR` e ignora `X-Forwarded-For`,
+evitando que el cliente cambie su contador mediante una cabecera inventada.
+Si existe un proxy, este valor agrupa las solicitudes anónimas que comparten
+su dirección. Para distinguir clientes detrás de él, establecer el número real
+de proxies confiables: con uno, `DJANGO_NUM_PROXIES=1`. DRF selecciona desde
+la derecha de la cadena X-Forwarded-For según ese número.
+
+Antes de habilitar un valor positivo, asegurar que cada salto confiable sanea
+o añade la dirección de su conexión de forma controlada y que la aplicación
+solo acepta tráfico a través de esa cadena. No permitir acceso directo a Gunicorn
+desde clientes externos. Verificar que cabeceras aportadas por el cliente no
+alteran su identidad y que dos clientes distintos conservan contadores distintos.
+`DJANGO_TRUST_PROXY` controla X-Forwarded-Proto/HTTPS; no habilita esta confianza
+de direcciones. Valores negativos o no enteros de DJANGO_NUM_PROXIES impiden
+el arranque para evitar una configuración ambigua.
 
 Comprobar configuración antes de publicar:
 
@@ -76,3 +93,22 @@ systemd evita solapar una misma unidad. Revisar journal y salida ante errores
 parciales; los comandos devuelven fallo para exigir atención/reintento.
 En hosting administrado usar su scheduler con estos mismos comandos y variables.
 Las unidades se entregan preparadas; no están instaladas ni activas en el equipo.
+
+Tras aplicar `economics.0003_lotes_actualizacion`, los fallos INFO conservan lotes
+en PostgreSQL. Para recuperación independiente de los proveedores, programar
+`python manage.py generar_alertas --limite 1000` con las mismas variables del
+backend. El comando devuelve `pendientes` y salida distinta de cero si hay errores
+o falta vaciar el alcance: volver a ejecutarlo y supervisar la cola de trabajos en
+el administrador de consulta. Sincronizaciones posteriores también reintentan
+sus países. Esta tarea adicional se documenta; no se activa automáticamente.
+
+Con `risk.0002_indice_alertas_procesadas`, el mismo comando recupera índices
+pendientes, incluidos históricos, y lotes INFO. `--limite` es un presupuesto
+**conjunto** de 1–1000 trabajos (100 por defecto), por antigüedad; `pendientes`
+suma ambos tipos dentro de `--paises`, o todos si no hay filtro. Índices sin
+reglas también consumen un turno. Una salida con pendientes exige otra ejecución.
+Detener productores y recuperadores durante la migración/despliegue: solo el
+último índice previo por país queda para revisión; los anteriores se excluyen
+de revisión retrospectiva para evitar una avalancha. Se conservan todos los
+datos y alertas. Reanudar los workers con el código nuevo tras migrar.
+[Contrato y política completa](../alerts/README.md).

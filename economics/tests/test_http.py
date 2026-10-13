@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.db import IntegrityError
 from django.test import LiveServerTestCase
 
 
@@ -68,3 +69,20 @@ class EconomicsHTTPTests(LiveServerTestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["results"][0]["valor"], "777.000000")
         self.assertFalse(data["results"][0]["es_simulado"])
+
+    def test_persistence_failure_over_http_has_safe_503_envelope(self):
+        from economics.models import IndicadorEconomico
+
+        original = IndicadorEconomico.objects.get(pais_id="CO", tipo_id="PIB", anio=2025).valor
+        with patch("integrations.world_bank.WorldBankClient.indicadores", return_value=[{
+                "codigo_world_bank": "NY.GDP.MKTP.CD", "anio": 2025, "valor": Decimal("777")}]), \
+                patch("economics.services.IndicadorEconomico.save", side_effect=IntegrityError(
+                    "duplicate key: constraint=diagnostico-privado")):
+            status, data = self.request("/api/paises/sync-indicadores/", {
+                "paises": ["CO"], "anio_inicio": 2025, "anio_fin": 2025,
+            }, token=self.login())
+        self.assertEqual(status, 503)
+        self.assertEqual(data["error"]["codigo"], "servicio_no_disponible")
+        self.assertEqual(data["error"]["detalles"]["errores"], data["errores"])
+        self.assertNotIn("diagnostico-privado", json.dumps(data))
+        self.assertEqual(IndicadorEconomico.objects.get(pais_id="CO", tipo_id="PIB", anio=2025).valor, original)

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
-from django.db import transaction
+from django.db import connections, transaction
 from django.contrib.admin.utils import unquote
 from audit.services import obtener_ip, registrar_actividad
 
@@ -38,6 +38,17 @@ class AccountsUserAdmin(AdminAuditadoMixin, UserAdmin):
             ),
         }),
     )
+
+    def get_object(self, request, object_id, from_field=None):
+        user = super().get_object(request, object_id, from_field)
+        queryset = self.get_queryset(request)
+        # Django abre la transacción antes de cargar el formulario de edición;
+        # user_change_password también está envuelto en atomic. Releer tras
+        # bloquear evita construir cualquiera de los dos formularios con datos
+        # anteriores a una escritura del perfil que acaba de completarse.
+        if user is not None and request.method == "POST" and connections[queryset.db].in_atomic_block:
+            return queryset.select_for_update().filter(pk=user.pk).first()
+        return user
 
     # Este panel permite gestionar roles y permisos: acceso solo a superusuarios.
     @transaction.atomic
