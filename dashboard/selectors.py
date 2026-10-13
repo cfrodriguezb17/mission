@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.db.models import Avg, OuterRef, Subquery
+from django.db.models import Avg, Count, OuterRef, Q, Subquery
 
 from alerts.selectors import alertas_visibles
 from countries.models import Pais
@@ -10,15 +10,19 @@ from risk.selectors import ultimos_indices
 
 
 def resumen_dashboard(usuario):
-    indices = ultimos_indices()
-    average = indices.aggregate(valor=Avg("indice_compuesto"))["valor"]
+    metrics = ultimos_indices().aggregate(
+        promedio=Avg("indice_compuesto"),
+        total=Count("pk"),
+        parciales=Count("pk", filter=Q(detalle_calculo__datos_parciales=True)),
+    )
+    average = metrics["promedio"]
     return {
         "total_paises": Pais.objects.filter(activo=True).count(),
         "alertas_activas": alertas_visibles(usuario).filter(leida=False).count(),
         "portafolios_usuario": portafolios_visibles(usuario).filter(usuario=usuario).count(),
         "promedio_irpc": str(average.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) if average is not None else None,
-        "paises_con_riesgo": indices.count(),
-        "paises_con_datos_parciales": indices.filter(detalle_calculo__datos_parciales=True).count(),
+        "paises_con_riesgo": metrics["total"],
+        "paises_con_datos_parciales": metrics["parciales"],
     }
 
 

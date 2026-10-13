@@ -135,6 +135,14 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# WSGI reutiliza conexiones por worker; usar 0 con ASGI o pooling de psycopg.
+try:
+    DB_CONN_MAX_AGE = int(os.environ.get('DJANGO_DB_CONN_MAX_AGE', '60'))
+except ValueError as exc:
+    raise ValueError('DJANGO_DB_CONN_MAX_AGE debe ser un entero mayor o igual a cero.') from exc
+if DB_CONN_MAX_AGE < 0:
+    raise ValueError('DJANGO_DB_CONN_MAX_AGE debe ser un entero mayor o igual a cero.')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -143,6 +151,8 @@ DATABASES = {
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'CONN_MAX_AGE': DB_CONN_MAX_AGE,
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 

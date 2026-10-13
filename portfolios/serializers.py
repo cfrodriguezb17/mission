@@ -1,3 +1,4 @@
+from django.db.models import Prefetch, prefetch_related_objects
 from rest_framework import serializers
 
 from common.serializers import BooleanQueryField, StrictInputSerializer as EntradaEstricta
@@ -121,8 +122,14 @@ class PortafolioDetailSerializer(PortafolioSerializer):
         fields = PortafolioSerializer.Meta.fields + ["posiciones", "resumen"]
         read_only_fields = fields
 
+    def to_representation(self, instance):
+        # Detalle y resumen comparten posiciones; el país se carga en el mismo SELECT.
+        prefetch_related_objects([instance], Prefetch(
+            "posiciones", queryset=Posicion.objects.select_related("pais")))
+        return super().to_representation(instance)
+
     def get_resumen(self, obj):
-        return resumen_portafolio(obj)
+        return resumen_portafolio(obj, posiciones=obj.posiciones.all())
 
 
 class PortafolioFilterSerializer(serializers.Serializer):

@@ -21,6 +21,7 @@ Variables de producción:
 | DJANGO_SECRET_KEY | Secreto aleatorio propio del entorno. |
 | DJANGO_ALLOWED_HOSTS | Dominio del backend, sin esquema ni rutas. |
 | POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT | Credenciales del PostgreSQL administrado. |
+| DJANGO_DB_CONN_MAX_AGE | Segundos de reutilización por conexión; 60 por defecto, 0 para desactivarla. Entero >= 0. |
 | CORS_ALLOWED_ORIGINS | Origen HTTPS del cliente; sin barra final. |
 | CSRF_TRUSTED_ORIGINS | Origen HTTPS del admin si se usa un dominio distinto. |
 | DJANGO_SECURE_SSL_REDIRECT | true |
@@ -66,6 +67,19 @@ Verificar tras publicar: `/health/`, `/api/`, `/api/docs/`, login de los tres ro
 dashboard, PDF y CORS desde el origen permitido. Registrar URL y resultados en el
 README cuando exista una publicación real. Credenciales DEMO están exigidas por
 la prueba; los datos históricos de seed son simulados.
+
+## Conexiones PostgreSQL
+
+El arranque actual usa Gunicorn WSGI. Django conserva cada conexión durante un
+máximo de 60 segundos y comprueba su disponibilidad antes de reutilizarla en
+una petición. `DJANGO_DB_CONN_MAX_AGE=0` restaura el cierre al finalizar cada
+petición. Los valores negativos o no enteros impiden el arranque.
+
+Cada worker/hilo puede mantener su propia conexión: dimensionar el número de
+workers e instancias junto con los comandos programados y el límite de conexiones
+del proveedor. Si se migra a ASGI, establecer `DJANGO_DB_CONN_MAX_AGE=0`; un pool
+de psycopg requiere además instalar/configurar `psycopg[pool]` y conservar ese
+valor en cero. No se activa un pool ni PgBouncer en esta entrega.
 
 ## Docker
 

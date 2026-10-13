@@ -14,6 +14,7 @@ from countries.models import Pais
 from economics.models import IndicadorEconomico
 from portfolios.models import Portafolio
 from risk.models import IndiceRiesgo
+from dashboard.selectors import resumen_dashboard
 
 
 class DashboardTests(TestCase):
@@ -52,13 +53,33 @@ class DashboardTests(TestCase):
         self.api.force_authenticate(self.user)
 
     def test_summary_uses_only_latest_risk_and_own_active_portfolios(self):
-        response = self.api.get("/api/dashboard/resumen/")
+        # Cuatro SELECT y el INSERT de auditoría, sin autenticación SQL en este cliente.
+        with self.assertNumQueries(5):
+            response = self.api.get("/api/dashboard/resumen/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, {"total_paises": 10, "alertas_activas": 1,
             "portafolios_usuario": 1, "promedio_irpc": "60.00", "paises_con_riesgo": 2,
             "paises_con_datos_parciales": 1})
         event = LogActividad.objects.get(accion="CONSULTAR", entidad_afectada="Dashboard")
         self.assertEqual(event.usuario, self.user)
+
+    def test_summary_without_risks_preserves_null_average_and_zero_counts(self):
+        IndiceRiesgo.objects.all().delete()
+        with self.assertNumQueries(4):
+            data = resumen_dashboard(self.user)
+        self.assertIsNone(data["promedio_irpc"])
+        self.assertEqual(data["paises_con_riesgo"], 0)
+        self.assertEqual(data["paises_con_datos_parciales"], 0)
+
+    def test_summary_excludes_inactive_countries_and_missing_partial_flag(self):
+        Pais.objects.filter(pk="CO").update(activo=False)
+        IndiceRiesgo.objects.filter(pais_id="BR").update(detalle_calculo={})
+        with self.assertNumQueries(4):
+            data = resumen_dashboard(self.user)
+        self.assertEqual(data["total_paises"], 9)
+        self.assertEqual(data["promedio_irpc"], "40.00")
+        self.assertEqual(data["paises_con_riesgo"], 1)
+        self.assertEqual(data["paises_con_datos_parciales"], 0)
 
     def test_alert_reads_are_independent_and_private_alerts_never_leak(self):
         LecturaAlerta.objects.create(usuario=self.other, alerta=self.global_alert)
