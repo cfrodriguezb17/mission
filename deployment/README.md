@@ -10,7 +10,9 @@ proyecto. El repositorio backend tampoco tiene remoto Git configurado actualment
 Directorio del servicio: `backend` si se publica el repositorio conjunto; la raíz
 si se publica solo este repositorio backend. Build: `pip install -r requirements.txt`.
 Start: `sh deployment/start.sh`. Ejecuta migraciones incrementales, collectstatic
-y Gunicorn con 2 workers (configurable) y timeout de 90 segundos. Health: `/health/`.
+y Uvicorn ASGI con 2 workers (configurable), uvloop y httptools. El cierre
+elegante espera hasta 90 segundos; cada worker admite hasta 32 conexiones/tareas
+HTTP simultáneas (configurable). Health: `/health/`.
 Seed es un paso explícito: `python manage.py seed_data`; no se ejecuta en cada arranque.
 
 Variables de producción:
@@ -21,7 +23,10 @@ Variables de producción:
 | DJANGO_SECRET_KEY | Secreto aleatorio propio del entorno. |
 | DJANGO_ALLOWED_HOSTS | Dominio del backend, sin esquema ni rutas. |
 | POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT | Credenciales del PostgreSQL administrado. |
-| DJANGO_DB_CONN_MAX_AGE | Segundos de reutilización por conexión; 60 por defecto, 0 para desactivarla. Entero >= 0. |
+| DJANGO_DB_CONN_MAX_AGE | 0 obligatorio en ASGI; el script de arranque lo establece. |
+| DJANGO_DB_POOL | true por defecto: pool físico de psycopg por worker. |
+| DJANGO_DB_POOL_MIN_SIZE, DJANGO_DB_POOL_MAX_SIZE | 1 y 4 por defecto; mínimo >= 0, máximo >= 1. |
+| DJANGO_DB_PREPARE_THRESHOLD | 5 por defecto; entero >= 0, vacío desactiva preparación automática. |
 | CORS_ALLOWED_ORIGINS | Origen HTTPS del cliente; sin barra final. |
 | CSRF_TRUSTED_ORIGINS | Origen HTTPS del admin si se usa un dominio distinto. |
 | DJANGO_SECURE_SSL_REDIRECT | true |
@@ -33,7 +38,10 @@ Variables de producción:
 | DJANGO_DATA_CACHE_TTL | Caducidad de datos en segundos: 60 por defecto, 0 para desactivar; entero >= 0. |
 | DJANGO_DATA_CACHE_PREFIX | Prefijo exclusivo del proyecto y entorno en Redis; separar pruebas y producción. |
 | REST_COUNTRIES_API_KEY | Clave v5 para sincronización real de datos generales. |
-| PORT, WEB_CONCURRENCY | Puerto del proveedor y número de workers. |
+| DJANGO_REALTIME_REDIS_URL | Redis de eventos; usa DJANGO_REDIS_URL si no se define. |
+| DJANGO_REALTIME_PREFIX | Prefijo exclusivo de eventos por proyecto/entorno. |
+| PORT, WEB_CONCURRENCY | Puerto del proveedor y número de workers (2 por defecto). |
+| WEB_LIMIT_CONCURRENCY | Límite HTTP por worker; 32 por defecto. SSE ocupa una conexión mientras esté abierto. |
 
 El proveedor debe suministrar HTTPS y un proxy confiable. Confirmar que health
 recibe el protocolo correcto o permite seguir la redirección HTTPS. Los archivos
@@ -51,7 +59,7 @@ la derecha de la cadena X-Forwarded-For según ese número.
 
 Antes de habilitar un valor positivo, asegurar que cada salto confiable sanea
 o añade la dirección de su conexión de forma controlada y que la aplicación
-solo acepta tráfico a través de esa cadena. No permitir acceso directo a Gunicorn
+solo acepta tráfico a través de esa cadena. No permitir acceso directo a Uvicorn
 desde clientes externos. Verificar que cabeceras aportadas por el cliente no
 alteran su identidad y que dos clientes distintos conservan contadores distintos.
 `DJANGO_TRUST_PROXY` controla X-Forwarded-Proto/HTTPS; no habilita esta confianza
@@ -73,16 +81,35 @@ la prueba; los datos históricos de seed son simulados.
 
 ## Conexiones PostgreSQL
 
-El arranque actual usa Gunicorn WSGI. Django conserva cada conexión durante un
-máximo de 60 segundos y comprueba su disponibilidad antes de reutilizarla en
-una petición. `DJANGO_DB_CONN_MAX_AGE=0` restaura el cierre al finalizar cada
-petición. Los valores negativos o no enteros impiden el arranque.
+El arranque usa ASGI/Uvicorn con `CONN_MAX_AGE=0`. El pool nativo de psycopg
+reutiliza conexiones físicas, comprobando su salud al prestarlas. Cada worker
+abre al menos 1 y como máximo 4 conexiones por defecto; espera hasta 5 segundos
+para obtener una y admite hasta 16 peticiones en espera. Con 2 workers, reservar
+hasta **8 conexiones por instancia**, más comandos, migraciones y otras instancias.
+Ajustar ese presupuesto al límite de PostgreSQL del proveedor.
 
-Cada worker/hilo puede mantener su propia conexión: dimensionar el número de
-workers e instancias junto con los comandos programados y el límite de conexiones
-del proveedor. Si se migra a ASGI, establecer `DJANGO_DB_CONN_MAX_AGE=0`; un pool
-de psycopg requiere además instalar/configurar `psycopg[pool]` y conservar ese
-valor en cero. No se activa un pool ni PgBouncer en esta entrega.
+Se activan `server_side_binding` y `prepare_threshold=5`: psycopg prepara
+consultas parametrizadas que se repiten en cada conexión física. No todas las
+consultas se preparan en la primera ejecución; la reutilización del pool permite
+alcanzar el umbral. Las sentencias y su caché son locales a la conexión PostgreSQL.
+`DJANGO_DB_PREPARE_THRESHOLD=` desactiva ambas opciones. Usar esa salida si un
+pooler externo no admite sentencias preparadas del protocolo PostgreSQL; verificar
+su modo y configuración antes de habilitarlas. La conexión directa a PostgreSQL
+no necesita PgBouncer. El pool local no reemplaza al límite global del proveedor.
+
+## WebSockets y streaming
+
+Configurar Redis y `CORS_ALLOWED_ORIGINS` con los orígenes reales del frontend.
+El proxy debe permitir Upgrade de WebSocket, conservar conexiones SSE y desactivar
+su buffering; SSE envía `X-Accel-Buffering: no`. Usar HTTPS/WSS en producción.
+Uvicorn no interpreta encabezados de proxy: Django aplica la confianza configurada
+en `DJANGO_TRUST_PROXY` y `DJANGO_NUM_PROXIES`.
+
+Sin Redis, las consultas HTTP y el resumen async siguen funcionando; streaming
+devuelve 503 y WebSocket rechaza la conexión. Los avisos se publican tras commit:
+un fallo de Redis no revierte datos. Son avisos de refresco sin reproducción
+histórica; al reconectar consultar nuevamente los endpoints REST. Las operaciones
+bulk/directas en SQL no generan señales. [Contrato y ejemplos](../realtime/README.md).
 
 ## Caché de datos compartidos
 

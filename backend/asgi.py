@@ -13,4 +13,23 @@ from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 
-application = get_asgi_application()
+django_application = get_asgi_application()
+
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+from django.urls import path
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import OriginValidator
+from realtime.consumers import NotificationsConsumer
+
+if settings.DATABASES['default']['CONN_MAX_AGE'] != 0:
+    raise ImproperlyConfigured('ASGI requiere DJANGO_DB_CONN_MAX_AGE=0.')
+
+origins = settings.CORS_ALLOWED_ORIGINS or (
+    ['http://localhost:4200', 'http://127.0.0.1:4200'] if settings.DEBUG else [])
+application = ProtocolTypeRouter({
+    'http': django_application,
+    'websocket': OriginValidator(URLRouter([
+        path('ws/notificaciones/', NotificationsConsumer.as_asgi()),
+    ]), origins),
+})

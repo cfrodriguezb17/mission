@@ -27,6 +27,7 @@ urlpatterns = [
     path('health/', health, name='health'),
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
+    path('api/realtime/', include('realtime.urls')),
     path('api/paises/', include('economics.urls')),
     path('api/paises/', include('countries.urls')),
     path('api/riesgo/', include('risk.urls')),

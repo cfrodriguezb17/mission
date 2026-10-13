@@ -7,11 +7,11 @@ consultan durante sincronizaciones y las lecturas usan datos persistidos.
 ## Estado actual
 
 Implementados: accounts, countries, economics, risk, alerts, portfolios, audit,
-dashboard y reporting. No se agregaron tablas ni migraciones para dashboard/PDF:
+dashboard, reporting y realtime. No se agregaron tablas ni migraciones para dashboard/PDF:
 consumen el modelo existente. Errores uniformes en español, throttling, logs JSON
 de requests y CORS configurable están conectados a la API completa.
 
-Se entrega arranque Gunicorn, WhiteNoise para estáticos, Dockerfile y plantillas
+Se entrega arranque ASGI/Uvicorn, WhiteNoise para estáticos, Dockerfile y plantillas
 de tareas programadas. Publicación/URL pública pendiente de proveedor y cuenta.
 REST Countries tiene una [prueba real satisfactoria de los diez países](../docs/backend-audit-20261010/REST_COUNTRIES.md)
 con proveedor autenticado, persistencia en PostgreSQL temporal y lecturas HTTP
@@ -41,7 +41,7 @@ se interpolan caracteres `$` dentro de valores. `.env` está ignorado por Git.
 python manage.py check
 python manage.py migrate
 python manage.py seed_data
-python manage.py runserver
+python -m uvicorn backend.asgi:application --reload --lifespan off --no-proxy-headers
 ```
 
 API local: `http://127.0.0.1:8000/api/`. Documentación: `/api/docs/` y
@@ -140,7 +140,7 @@ Se elige PostgreSQL por constraints, bloqueos de fila y concurrencia. Se evitan
 repositorios que dupliquen el ORM, microservicios sin necesidad comprobada y
 Celery/Redis hasta requerir una cola. Los comandos Django están permitidos por
 la prueba. ReportLab genera PDF sin navegador ni servicio externo; CORS y estáticos
-se resuelven con django-cors-headers y WhiteNoise; Gunicorn sirve WSGI.
+se resuelven con django-cors-headers y WhiteNoise; Uvicorn sirve ASGI.
 
 ## Permisos, concurrencia y riesgo
 
@@ -220,12 +220,13 @@ permisos, faltantes, umbrales, concurrencia, PDF y validaciones.
 la elimina al pasar y la conserva ante fallos para diagnóstico. `--fresh` genera
 accounts en un paquete temporal, sin modificar migraciones del repositorio.
 
-Última suite global comprobada: **346 pruebas correctas en PostgreSQL, 13 de
+Última suite global comprobada: **364 pruebas correctas en PostgreSQL, 13 de
 octubre de 2026**, con migraciones originales desde cero y base temporal eliminada.
 Las optimizaciones reducen de 5 a 2 las consultas de serialización del portafolio
 medido y de 6 a 4 las del selector del dashboard, conservando respuestas iguales.
-Gunicorn WSGI reutiliza conexiones durante 60 segundos, configurable mediante
-`DJANGO_DB_CONN_MAX_AGE`. No se añadieron índices ni migraciones tras revisar seis
+La etapa alta usaba Gunicorn WSGI y conexiones persistentes de 60 segundos.
+El arranque actual usa ASGI/Uvicorn, pool de psycopg y preparación automática
+de sentencias, con `DJANGO_DB_CONN_MAX_AGE=0`. No se añadieron índices ni migraciones tras revisar seis
 planes SQL. [Resultados y reproducción](docs/performance-20261013/INFORME.md).
 
 La etapa de prioridad media añade lecturas con `values()`/`values_list()` y caché
@@ -307,3 +308,12 @@ PostgreSQL, health, Docker y plantillas systemd para comandos diarios. El seed
 de entrega se ejecuta explícitamente, no durante cada arranque.
 La URL pública se documentará tras una publicación real; no hay un proveedor
 ni remoto Git configurados en el estado actual del proyecto.
+
+## ASGI, consultas preparadas y tiempo real
+
+El módulo `realtime` añade un resumen async, streaming SSE y WebSockets para
+avisos de alertas y cambios del dashboard, con JWT y permisos por usuario.
+Configurar Redis para comunicar los workers. Las escrituras transaccionales
+existentes conservan su implementación síncrona, adaptada por Django a ASGI.
+[Uso y configuración](realtime/README.md), [despliegue](deployment/README.md) y
+[pruebas y mediciones](docs/asgi-realtime-20261013/INFORME.md).

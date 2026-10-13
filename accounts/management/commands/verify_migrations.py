@@ -123,6 +123,7 @@ class Command(BaseCommand):
                     "audit",
                     "dashboard",
                     "reporting",
+                    "realtime",
                 ] if options["fresh"] else []
                 run("test", *test_labels, "--keepdb", "--noinput", overrides={
                     "PYTHONPATH": str(scratch) + os.pathsep + str(project),

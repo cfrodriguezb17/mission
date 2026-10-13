@@ -239,3 +239,30 @@ query, actor autenticado, duración y estado; nunca cuerpos, tokens ni cabeceras
 Auditoría usa metadatos tipados para CRUD, consultas, login, tareas y EXPORT.
 
 La documentación también se sirve en `/api/docs/` como JSON con contenido Markdown.
+
+## Tiempo real y resumen asincrónico
+
+| Método | Endpoint | Contrato |
+| --- | --- | --- |
+| GET | `/realtime/resumen/` | JWT; `alertas_no_leidas` visibles y `paises_activos`, contados mediante ORM async. |
+| GET | `/realtime/stream/` | JWT en Authorization; SSE incremental, requiere Redis. |
+| WebSocket | `/ws/notificaciones/` (fuera de `/api/`) | Origin permitido y JWT; avisos de alertas visibles y dashboard. |
+
+Resumen y SSE solo admiten GET (405 en otros métodos). Autenticación ausente,
+inactiva o expirada: 401; límite de solicitudes: 429; Redis ausente/fallido al
+abrir SSE: 503. Se aplica el mismo límite por usuario de la API.
+
+WebSocket acepta protocolos `datapulse` y `bearer.<access>` para navegadores,
+y selecciona únicamente `datapulse`. Clientes que admitan Authorization pueden
+usarlo. No se aceptan tokens por URL. Eventos JSON: `conexion.lista`,
+`alerta.creada` (solo `id`), `dashboard.actualizado` y `ping`.
+El cliente puede enviar `{"accion":"ping"}` una vez por segundo y recibe `pong`.
+Mensajes no admitidos cierran con 4400; exceso de pings con 4429.
+
+JWT y usuario se revalidan antes de cada aviso y cada 15 segundos.
+Revocación/expiración cierra WebSocket (4401); SSE emite
+`autenticacion.expirada` y termina. SSE usa los mismos nombres en el campo
+`event` y un objeto JSON en `data`. Un fallo de Redis durante SSE emite
+`servicio.no_disponible` y termina. Reabrir con un access vigente y refrescar REST.
+Estos avisos no incluyen mensajes privados ni proporcionan reproducción de eventos.
+[Configuración y ejemplos de cliente](realtime/README.md).

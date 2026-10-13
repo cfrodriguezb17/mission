@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'audit.apps.AuditConfig',
     'dashboard.apps.DashboardConfig',
     'reporting.apps.ReportingConfig',
+    'realtime.apps.RealtimeConfig',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -146,18 +147,41 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
+ASGI_APPLICATION = 'backend.asgi.application'
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# WSGI reutiliza conexiones por worker; usar 0 con ASGI o pooling de psycopg.
-try:
-    DB_CONN_MAX_AGE = int(os.environ.get('DJANGO_DB_CONN_MAX_AGE', '60'))
-except ValueError as exc:
-    raise ValueError('DJANGO_DB_CONN_MAX_AGE debe ser un entero mayor o igual a cero.') from exc
-if DB_CONN_MAX_AGE < 0:
-    raise ValueError('DJANGO_DB_CONN_MAX_AGE debe ser un entero mayor o igual a cero.')
+def env_integer(name, default, minimum=0):
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError as exc:
+        raise ValueError(f'{name} debe ser un entero mayor o igual a {minimum}.') from exc
+    if value < minimum:
+        raise ValueError(f'{name} debe ser un entero mayor o igual a {minimum}.')
+    return value
+
+
+DB_CONN_MAX_AGE = env_integer('DJANGO_DB_CONN_MAX_AGE', 0)
+DB_POOL_ENABLED = os.environ.get('DJANGO_DB_POOL', 'true').lower()
+if DB_POOL_ENABLED not in ('true', 'false'):
+    raise ValueError('DJANGO_DB_POOL debe ser true o false.')
+DB_POOL_ENABLED = DB_POOL_ENABLED == 'true'
+DB_POOL_MIN_SIZE = env_integer('DJANGO_DB_POOL_MIN_SIZE', 1)
+DB_POOL_MAX_SIZE = env_integer('DJANGO_DB_POOL_MAX_SIZE', 4, 1)
+if DB_POOL_MIN_SIZE > DB_POOL_MAX_SIZE:
+    raise ValueError('DJANGO_DB_POOL_MIN_SIZE no puede superar DJANGO_DB_POOL_MAX_SIZE.')
+if DB_POOL_ENABLED and DB_CONN_MAX_AGE:
+    raise ValueError('DJANGO_DB_CONN_MAX_AGE debe ser 0 con DJANGO_DB_POOL=true.')
+DB_OPTIONS = {}
+if DB_POOL_ENABLED:
+    DB_OPTIONS['pool'] = {'min_size': DB_POOL_MIN_SIZE, 'max_size': DB_POOL_MAX_SIZE,
+                          'timeout': 5, 'max_waiting': DB_POOL_MAX_SIZE * 4}
+DB_PREPARE_THRESHOLD = os.environ.get('DJANGO_DB_PREPARE_THRESHOLD', '5').strip()
+if DB_PREPARE_THRESHOLD:
+    DB_OPTIONS.update(server_side_binding=True,
+                      prepare_threshold=env_integer('DJANGO_DB_PREPARE_THRESHOLD', 5))
 
 DATABASES = {
     'default': {
@@ -169,8 +193,22 @@ DATABASES = {
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
         'CONN_MAX_AGE': DB_CONN_MAX_AGE,
         'CONN_HEALTH_CHECKS': True,
+        'OPTIONS': DB_OPTIONS,
     }
 }
+
+REALTIME_REDIS_URL = os.environ.get('DJANGO_REALTIME_REDIS_URL', '').strip() or REDIS_URL
+REALTIME_ENABLED = bool(REALTIME_REDIS_URL)
+if REALTIME_REDIS_URL and not REALTIME_REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
+    raise ValueError('DJANGO_REALTIME_REDIS_URL debe usar redis://, rediss:// o unix://.')
+REALTIME_PREFIX = os.environ.get('DJANGO_REALTIME_PREFIX', 'datapulse:realtime:' + DATABASES['default']['NAME'])
+REALTIME_HEARTBEAT = 15
+CHANNEL_LAYERS = {'default': {
+    'BACKEND': 'channels_redis.core.RedisChannelLayer',
+    # Channels hace lecturas bloqueantes de hasta 5 s; el timeout debe superarlas.
+    'CONFIG': {'hosts': [{'address': REALTIME_REDIS_URL, 'socket_connect_timeout': 0.5, 'socket_timeout': 10}],
+               'prefix': REALTIME_PREFIX, 'capacity': 100, 'expiry': 60, 'group_expiry': 60},
+}} if REALTIME_ENABLED else {}
 
 
 # Password validation
