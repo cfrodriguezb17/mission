@@ -27,6 +27,10 @@ class IndicadorSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class IndicadorValuesSerializer(IndicadorSerializer):
+    unidad = serializers.CharField(source="tipo__unidad", read_only=True)
+
+
 class TipoCambioSerializer(serializers.ModelSerializer):
     moneda_origen = serializers.CharField(source="moneda_origen_id", read_only=True)
     moneda_destino = serializers.CharField(source="moneda_destino_id", read_only=True)

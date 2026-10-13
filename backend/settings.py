@@ -89,6 +89,22 @@ CACHES = {'default': {
     'BACKEND': 'django.core.cache.backends.locmem.LocMemCache' if DEBUG else 'django.core.cache.backends.filebased.FileBasedCache',
     'LOCATION': os.environ.get('DJANGO_CACHE_LOCATION') or str(BASE_DIR / '.cache'),
 }}
+REDIS_URL = os.environ.get('DJANGO_REDIS_URL', '').strip()
+DATA_CACHE_ENABLED = bool(REDIS_URL)
+try:
+    DATA_CACHE_TTL = int(os.environ.get('DJANGO_DATA_CACHE_TTL', '60'))
+except ValueError as exc:
+    raise ValueError('DJANGO_DATA_CACHE_TTL debe ser un entero mayor o igual a cero.') from exc
+if DATA_CACHE_TTL < 0:
+    raise ValueError('DJANGO_DATA_CACHE_TTL debe ser un entero mayor o igual a cero.')
+if REDIS_URL and not REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
+    raise ValueError('DJANGO_REDIS_URL debe usar redis://, rediss:// o unix://.')
+CACHES['data'] = {
+    'BACKEND': 'django.core.cache.backends.redis.RedisCache' if REDIS_URL else 'django.core.cache.backends.dummy.DummyCache',
+    'LOCATION': REDIS_URL,
+    'KEY_PREFIX': os.environ.get('DJANGO_DATA_CACHE_PREFIX', 'datapulse:data'),
+    'OPTIONS': {'socket_connect_timeout': 0.5, 'socket_timeout': 0.5} if REDIS_URL else {},
+}
 TEST_RUNNER = 'common.testing.CacheIsolatedRunner'
 
 SIMPLE_JWT = {

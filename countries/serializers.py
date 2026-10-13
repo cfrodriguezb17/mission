@@ -17,6 +17,11 @@ class PaisSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class PaisValuesSerializer(PaisSerializer):
+    moneda_codigo = serializers.CharField(source="moneda_id", read_only=True)
+    moneda_nombre = serializers.CharField(source="moneda__nombre", read_only=True)
+
+
 class PaisDetailSerializer(PaisSerializer):
     indicadores = IndicadorSerializer(many=True, read_only=True)
 

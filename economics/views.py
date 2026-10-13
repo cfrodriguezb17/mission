@@ -20,7 +20,7 @@ from countries.models import Pais
 
 from .models import IndicadorEconomico
 from .selectors import cotizaciones_con_anterior
-from .serializers import IndicadorFilterSerializer, IndicadorSerializer, SyncSerializer, TipoCambioSerializer
+from .serializers import IndicadorFilterSerializer, IndicadorValuesSerializer, SyncSerializer, TipoCambioSerializer
 from backend.workflows import sincronizar_y_recalcular as sincronizar_indicadores
 
 
@@ -35,7 +35,7 @@ class EconomicListView(ConsultaAuditadaMixin, generics.ListAPIView):
 
 
 class IndicadorListView(EconomicListView):
-    serializer_class = IndicadorSerializer
+    serializer_class = IndicadorValuesSerializer
     ordering_fields = ["anio", "tipo", "valor", "fecha_actualizacion", "id"]
     ordering = ["-anio", "tipo", "id"]
 
@@ -46,7 +46,8 @@ class IndicadorListView(EconomicListView):
             params["tipo"] = params["tipo"].strip().upper()
         serializer = IndicadorFilterSerializer(data=params)
         serializer.is_valid(raise_exception=True)
-        return IndicadorEconomico.objects.filter(pais=pais, **serializer.validated_data).select_related("tipo")
+        return IndicadorEconomico.objects.filter(pais=pais, **serializer.validated_data).values(
+            "id", "pais_id", "tipo_id", "valor", "tipo__unidad", "anio", "fuente", "es_simulado", "fecha_actualizacion")
 
 
 class TipoCambioListView(EconomicListView):

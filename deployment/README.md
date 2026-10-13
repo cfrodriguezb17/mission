@@ -29,6 +29,9 @@ Variables de producción:
 | DJANGO_TRUST_PROXY | true solo si el proxy sobrescribe X-Forwarded-Proto. |
 | DJANGO_NUM_PROXIES | Entero >= 0; por defecto 0. Número de proxies confiables para identificar clientes en el límite de solicitudes. |
 | DJANGO_CACHE_LOCATION | Directorio escribible compartido entre workers de esta instancia. |
+| DJANGO_REDIS_URL | URL privada de Redis para la caché de datos compartidos; vacía la desactiva. |
+| DJANGO_DATA_CACHE_TTL | Caducidad de datos en segundos: 60 por defecto, 0 para desactivar; entero >= 0. |
+| DJANGO_DATA_CACHE_PREFIX | Prefijo exclusivo del proyecto y entorno en Redis; separar pruebas y producción. |
 | REST_COUNTRIES_API_KEY | Clave v5 para sincronización real de datos generales. |
 | PORT, WEB_CONCURRENCY | Puerto del proveedor y número de workers. |
 
@@ -80,6 +83,23 @@ workers e instancias junto con los comandos programados y el límite de conexion
 del proveedor. Si se migra a ASGI, establecer `DJANGO_DB_CONN_MAX_AGE=0`; un pool
 de psycopg requiere además instalar/configurar `psycopg[pool]` y conservar ese
 valor en cero. No se activa un pool ni PgBouncer en esta entrega.
+
+## Caché de datos compartidos
+
+Definir `DJANGO_REDIS_URL` para habilitar el alias `data` con Redis nativo de
+Django. Se admiten `redis://`, `rediss://` (TLS) y `unix://`. En Railway, conectar
+el servicio Redis por su URL privada desde el mismo proyecto y entorno. No
+publicar credenciales en el repositorio. Redis es opcional: sin URL se consulta
+PostgreSQL directamente. Los timeouts de conexión y lectura son de 0.5 segundos.
+
+Se almacenan datos compartidos de países, mapa, tendencias y métricas comunes
+del dashboard; los conteos privados de cada usuario permanecen frescos. Las
+escrituras invalidan tras commit y el TTL limita la antigüedad si falla Redis.
+La caché no reemplaza permisos, auditoría ni throttling. El alias `default` de
+throttling conserva su configuración: centralizarlo también antes de escalar a
+varias instancias. No usar Redis como almacenamiento permanente de los datos.
+
+[Implementación, invalidación y verificaciones](../docs/performance-medium-20261013/INFORME.md).
 
 ## Docker
 

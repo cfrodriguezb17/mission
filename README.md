@@ -220,13 +220,20 @@ permisos, faltantes, umbrales, concurrencia, PDF y validaciones.
 la elimina al pasar y la conserva ante fallos para diagnóstico. `--fresh` genera
 accounts en un paquete temporal, sin modificar migraciones del repositorio.
 
-Última suite global comprobada: **333 pruebas correctas en PostgreSQL, 13 de
+Última suite global comprobada: **346 pruebas correctas en PostgreSQL, 13 de
 octubre de 2026**, con migraciones originales desde cero y base temporal eliminada.
 Las optimizaciones reducen de 5 a 2 las consultas de serialización del portafolio
 medido y de 6 a 4 las del selector del dashboard, conservando respuestas iguales.
 Gunicorn WSGI reutiliza conexiones durante 60 segundos, configurable mediante
 `DJANGO_DB_CONN_MAX_AGE`. No se añadieron índices ni migraciones tras revisar seis
 planes SQL. [Resultados y reproducción](docs/performance-20261013/INFORME.md).
+
+La etapa de prioridad media añade lecturas con `values()`/`values_list()` y caché
+opcional de datos compartidos mediante `DJANGO_REDIS_URL`. Conserva permisos,
+auditoría y conteos privados frescos; las escrituras invalidan tras commit.
+Se repitió el mismo benchmark HTTP contra la referencia original y contra la
+etapa alta, con Redis temporal y 4.800 peticiones por comparación, sin errores.
+[Implementación, resultados y límites](docs/performance-medium-20261013/INFORME.md).
 
 Suite histórica **B03 del 10 de octubre de 2026: 325 pruebas
 correctas en PostgreSQL**, sin omisiones, con migraciones originales desde cero,

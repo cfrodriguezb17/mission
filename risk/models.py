@@ -1,8 +1,7 @@
-from decimal import Decimal
-
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
+from .presentation import color_riesgo, nivel_riesgo
 
 
 class IndiceRiesgo(models.Model):
@@ -38,17 +37,11 @@ class IndiceRiesgo(models.Model):
 
     @property
     def nivel_riesgo(self):
-        if self.indice_compuesto >= Decimal("75"):
-            return "BAJO"
-        if self.indice_compuesto >= Decimal("50"):
-            return "MODERADO"
-        if self.indice_compuesto >= Decimal("25"):
-            return "ALTO"
-        return "CRITICO"
+        return nivel_riesgo(self.indice_compuesto)
 
     @property
     def color(self):
-        return {"BAJO": "#22c55e", "MODERADO": "#eab308", "ALTO": "#f97316", "CRITICO": "#ef4444"}[self.nivel_riesgo]
+        return color_riesgo(self.indice_compuesto)
 
     def __str__(self):
         return f"{self.pais_id} / {self.fecha_calculo} / {self.indice_compuesto}"
