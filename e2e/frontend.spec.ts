@@ -8,6 +8,8 @@ async function login(page: import('@playwright/test').Page, role = 'analista') {
   await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Panorama de Latinoamérica' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Ranking regional' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sincronizar indicadores' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Recalcular riesgos' })).toHaveCount(0);
 }
 test('login, gráficos, detalle de país, accesibilidad y tablet', async ({ page }) => {
   const errors: string[] = [];
@@ -94,6 +96,15 @@ test('crear, editar, posición, conflicto conservando borrador, PDF y eliminaci�
     await page.getByLabel('Monto en USD').fill('1,234.56');
     await page.getByLabel('Fecha de entrada').fill('2020-01-01');
     await page.getByLabel('Notas (opcional)').fill('Borrador conservado');
+    const preview = page.getByRole('region', { name: 'Previsualización del portafolio' });
+    await expect(preview.getByTestId('preview-risk')).toHaveText(/\d.*\/ 100/);
+    const projectedTotal = (await preview.getByTestId('preview-total').innerText())
+      .replace(/\s+/g, ' ')
+      .trim();
+    const projectedRisk = (await preview.getByTestId('preview-risk').innerText())
+      .replace(/\s+/g, ' ')
+      .trim();
+
     // Real concurrency: another request updates the portfolio after this form loaded.
     await page.evaluate(async (id) => {
       const token = localStorage.getItem('datapulse.access');
@@ -113,6 +124,19 @@ test('crear, editar, posición, conflicto conservando borrador, PDF y eliminaci�
     await page.getByRole('button', { name: 'Guardar posición' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByRole('cell', { name: /US\$\s*1\.234,56/ })).toBeVisible();
+    await expect(
+      page
+        .locator('section.panel')
+        .filter({ has: page.locator('.metric-label', { hasText: 'Capital activo invertido' }) })
+        .locator('.metric-value'),
+    ).toHaveText(projectedTotal);
+    await expect(
+      page
+        .locator('section.panel')
+        .filter({ has: page.locator('.metric-label', { hasText: 'IRPC promedio ponderado' }) })
+        .locator('.metric-value'),
+    ).toHaveText(projectedRisk);
+
     await page.getByRole('button', { name: 'Editar posición de Colombia' }).click();
     await page.getByLabel('Monto en USD').fill('2,000.00');
     await page.getByRole('button', { name: 'Guardar posición' }).click();

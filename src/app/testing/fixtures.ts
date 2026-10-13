@@ -1,4 +1,4 @@
-import { Country, PortfolioDetail, Position } from '../core/models/api.models';
+import { Country, PortfolioDetail, Position, Risk } from '../core/models/api.models';
 
 export function country(overrides: Partial<Country> = {}): Country {
   return {
@@ -51,6 +51,23 @@ export function portfolio(overrides: Partial<PortfolioDetail> = {}): PortfolioDe
       distribucion_por_tipo_activo: [],
       distribucion_por_riesgo: [],
     },
+    ...overrides,
+  };
+}
+
+export function risk(overrides: Partial<Risk> = {}): Risk {
+  return {
+    id: 1,
+    pais: 'CO',
+    nombre_pais: 'Colombia',
+    fecha_calculo: '2026-10-13T10:00:00Z',
+    score_economico: '80.00',
+    score_cambiario: '80.00',
+    score_estabilidad: '80.00',
+    indice_compuesto: '80.00',
+    nivel_riesgo: 'BAJO',
+    color: '#22c55e',
+    detalle_calculo: {},
     ...overrides,
   };
 }

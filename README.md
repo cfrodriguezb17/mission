@@ -10,6 +10,19 @@ alcance en [IMPLEMENTACION.md](IMPLEMENTACION.md).
 Requisitos: Node.js compatible con Angular 22 (verificado con Node 24.20), pnpm
 11.24 y backend Django con PostgreSQL, migraciones y datos precargados.
 
+Con el backend preparado, puedes iniciar ambos servicios desde esta carpeta:
+
+```bash
+pnpm local
+```
+
+O ejecutar `./run-local.sh` desde la raíz de la entrega. El
+[script](tools/run-local.sh) valida dependencias, puertos, PostgreSQL y migraciones;
+configura los orígenes CORS locales para el proceso y arranca ambos servidores
+con recarga automática. Ctrl+C los detiene juntos. Requiere Linux, Bash 4.3+,
+`setsid` y `curl`; PostgreSQL debe estar iniciado. No aplica migraciones ni carga
+datos al arrancar. Para la preparación inicial o el arranque por separado:
+
 Desde `backend`, siguiendo su [README](../backend/README.md):
 
 ```bash
@@ -64,22 +77,53 @@ cambio conserva el par del servidor: **USD por moneda local**.
 ```text
 src/app/
   core/
-    auth/          sesión, guards de autenticación/rol, interceptor JWT
-    models/        contratos tipados y catálogos
-    services/      API, países, riesgo, portafolios, alertas, carga y avisos
-  features/
-    auth/          login y registro
-    dashboard/     KPI, mapa, ranking y tendencias
-    countries/     listado y detalle
-    portfolios/    listado, creación, detalle y diálogos de edición
-    alerts/        panel y filtros
-    profile/       edición del perfil
-  layout/          navegación autenticada y usuario
-  shared/          gráficos, confirmación, validadores, estados y 404
+    auth/
+      services/auth.service.ts
+      guards/auth.guard.ts
+      guards/role.guard.ts
+      interceptors/jwt.interceptor.ts
+    services/
+      api.service.ts
+      pais.service.ts
+      portafolio.service.ts
+      riesgo.service.ts
+      alerta.service.ts
+      loading.service.ts
+      notify.service.ts
+    interceptors/
+      error.interceptor.ts
+      loading.interceptor.ts
+    models/
+  modules/
+    auth/          login/, register/, auth-form/
+    dashboard/     mapa-riesgo/, kpi-cards/, tabla-ranking/, grafico-tendencias/
+    paises/        lista-paises/, detalle-pais/
+    portafolios/   lista/, crear/, detalle/, posicion-form/, distribucion-chart/
+    alertas/       panel-alertas/, alerta-badge/
+    perfil/
+  shared/
+    loading-spinner/
+    confirm-dialog/
+    pipes/         catalogo.pipe.ts
+    directives/    role.directive.ts
+    charts/
+    page-state/
+    risk-badge/
+    not-found/
+    utils/
+  layout/
+  testing/
 ```
 
+La organización sigue el árbol de la sección 2.1 del documento. Cada bloque del
+dashboard y el badge de alertas tiene su propio componente. Login y registro
+cuentan con entradas independientes y reutilizan el formulario de autenticación.
+La directiva compartida `appRole` muestra las acciones administrativas según el
+rol; `catalogo` traduce códigos de riesgo para la presentación. Los guards y los
+interceptores se mantienen en archivos individuales.
+
 Las rutas cargan componentes standalone de forma diferida. Se usan signals y
-`computed` para estado local/derivado; AlertService publica estado mediante
+`computed` para estado local/derivado; AlertaService publica estado mediante
 `BehaviorSubject`/`Observable`. Los formularios usan ReactiveFormsModule, conforme
 al requisito, y las peticiones se cancelan al cambiar filtros o salir de la vista.
 Los servicios singleton usan `@Service`, disponible en Angular 22.
@@ -110,8 +154,16 @@ necesitar Google Fonts al compilar ni navegar.
   USD y fechas, excluyendo la posición que se edita de las sumas.
 - Cada escritura y DELETE envía `version`. Ante 409, se recarga el portafolio,
   se conserva el borrador y se exige revisar los cambios antes de reintentar.
-  Los totales y distribuciones proceden del resumen del backend y se refrescan
+  Los totales y distribuciones guardados proceden del resumen del backend y se refrescan
   después de cada modificación. Los flags de permisos gobiernan las acciones.
+- Al agregar/editar una posición se muestra «Así quedaría tu portafolio», con
+  total activo, IRPC ponderado y cantidad de posiciones. Consulta los últimos
+  índices al abrir el diálogo; los cambios del formulario se calculan localmente
+  con centavos e IRPC de dos decimales mediante BigInt y redondeo HALF_UP, igual
+  que el backend. Excluye posiciones cerradas y sustituye la editada sin duplicar.
+  Señala capital sin riesgo, evidencia parcial/simulada y fallos de consulta con
+  reintento. No guarda ni hace peticiones por cada cambio. El backend confirma
+  las cifras al guardar; una recarga por 409 actualiza también la estimación.
 - El PDF se descarga como Blob con nombre de Content-Disposition, se libera el
   Object URL y se interpreta el JSON de error si el servidor responde con uno.
 
@@ -126,7 +178,7 @@ pnpm test:e2e
 
 `pnpm test:pyramid` ejecuta **unitarias → integración → e2e** y se detiene ante
 el primer fallo. `pnpm test --watch=false` sigue ejecutando todas las pruebas de
-Vitest juntas. Resultado verificado: **43 unitarias, 34 integradas y 14 de
+Vitest juntas. Resultado verificado: **60 unitarias, 39 integradas y 17 de
 navegador**, todas pasan.
 
 Las unitarias e integradas no necesitan servidores. Playwright inicia Angular
@@ -134,7 +186,7 @@ si hace falta; la suite completa requiere Django local con los datos de
 demostración. Instalar Chromium una vez con `pnpm exec playwright install chromium`.
 `e2e/frontend.spec.ts` usa el backend real para login, roles, gráficos, país,
 CRUD, PDF y conflicto 409. Crea un portafolio temporal y lo elimina lógicamente
-al terminar. Los otros dos archivos e2e controlan las respuestas HTTP para
+al terminar. Los otros tres archivos e2e controlan las respuestas HTTP para
 registro/perfil, filtros, alertas, errores y renovación tardía de sesión.
 
 La guía de [pruebas y evidencia Red → Green → Refactor](docs/testing/README.md)

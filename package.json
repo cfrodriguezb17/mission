@@ -11,7 +11,8 @@
     "map:generate": "node tools/build-map.mjs",
     "test:unit": "ng test --watch=false --include '**/*.unit.spec.ts'",
     "test:integration": "ng test --watch=false --include '**/*.integration.spec.ts'",
-    "test:pyramid": "pnpm test:unit && pnpm test:integration && pnpm test:e2e"
+    "test:pyramid": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "local": "bash tools/run-local.sh"
   },
   "private": true,
   "packageManager": "pnpm@11.24.0",

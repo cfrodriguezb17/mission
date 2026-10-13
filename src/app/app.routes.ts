@@ -1,13 +1,16 @@
 import { Routes } from '@angular/router';
-import { authGuard, roleGuard } from './core/auth/guards';
+import { authGuard } from './core/auth/guards/auth.guard';
+import { roleGuard } from './core/auth/guards/role.guard';
 export const routes: Routes = [
   {
     path: 'login',
-    loadComponent: () => import('./features/auth/auth-page').then((m) => m.AuthPage),
+    loadComponent: () =>
+      import('./modules/auth/login/login.component').then((m) => m.LoginComponent),
   },
   {
     path: 'registro',
-    loadComponent: () => import('./features/auth/auth-page').then((m) => m.AuthPage),
+    loadComponent: () =>
+      import('./modules/auth/register/register.component').then((m) => m.RegisterComponent),
     data: { register: true },
   },
   {
@@ -18,43 +21,55 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       {
         path: 'dashboard',
-        loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+        loadComponent: () =>
+          import('./modules/dashboard/dashboard.component').then((m) => m.Dashboard),
       },
       {
         path: 'paises',
-        loadComponent: () => import('./features/countries/country-list').then((m) => m.CountryList),
+        loadComponent: () =>
+          import('./modules/paises/lista-paises/lista-paises.component').then((m) => m.CountryList),
       },
       {
         path: 'paises/:codigo',
         loadComponent: () =>
-          import('./features/countries/country-detail').then((m) => m.CountryDetail),
+          import('./modules/paises/detalle-pais/detalle-pais.component').then(
+            (m) => m.CountryDetail,
+          ),
       },
       {
         path: 'portafolios',
         loadComponent: () =>
-          import('./features/portfolios/portfolio-list').then((m) => m.PortfolioList),
+          import('./modules/portafolios/lista/lista.component').then((m) => m.PortfolioList),
       },
       {
         path: 'portafolios/nuevo',
         canActivate: [roleGuard],
         data: { roles: ['ADMIN', 'ANALISTA'] },
         loadComponent: () =>
-          import('./features/portfolios/portfolio-create').then((m) => m.PortfolioCreate),
+          import('./modules/portafolios/crear/crear.component').then((m) => m.PortfolioCreate),
       },
       {
         path: 'portafolios/:id',
         loadComponent: () =>
-          import('./features/portfolios/portfolio-detail').then((m) => m.PortfolioDetailPage),
+          import('./modules/portafolios/detalle/detalle.component').then(
+            (m) => m.PortfolioDetailPage,
+          ),
       },
       {
         path: 'alertas',
-        loadComponent: () => import('./features/alerts/alerts-page').then((m) => m.AlertsPage),
+        loadComponent: () =>
+          import('./modules/alertas/panel-alertas/panel-alertas.component').then(
+            (m) => m.AlertsPage,
+          ),
       },
       {
         path: 'perfil',
-        loadComponent: () => import('./features/profile/profile').then((m) => m.Profile),
+        loadComponent: () => import('./modules/perfil/perfil.component').then((m) => m.Profile),
       },
     ],
   },
-  { path: '**', loadComponent: () => import('./shared/not-found').then((m) => m.NotFound) },
+  {
+    path: '**',
+    loadComponent: () => import('./shared/not-found/not-found.component').then((m) => m.NotFound),
+  },
 ];

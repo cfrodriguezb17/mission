@@ -1,0 +1,35 @@
+@if (summary(); as s) {
+  <div class="kpi-grid">
+    <section class="panel kpi-card">
+      <div class="kpi-top">
+        Países monitoreados<span class="kpi-icon"><mat-icon>public</mat-icon></span>
+      </div>
+      <div class="kpi-value">{{ s.total_paises }}</div>
+      <div class="kpi-note"><span class="workspace-dot"></span>Mercados de Latinoamérica</div>
+    </section>
+    <section class="panel kpi-card">
+      <div class="kpi-top">
+        Alertas activas<span class="kpi-icon"><mat-icon>notifications_none</mat-icon></span>
+      </div>
+      <div class="kpi-value">{{ s.alertas_activas }}</div>
+      <div class="kpi-note"><a routerLink="/alertas">Revisa las alertas sin leer →</a></div>
+    </section>
+    <section class="panel kpi-card">
+      <div class="kpi-top">
+        Mis portafolios<span class="kpi-icon"><mat-icon>work_outline</mat-icon></span>
+      </div>
+      <div class="kpi-value">{{ s.portafolios_usuario }}</div>
+      <div class="kpi-note">Portafolios propios activos</div>
+    </section>
+    <section class="panel kpi-card">
+      <div class="kpi-top">
+        IRPC promedio regional<span class="kpi-icon"><mat-icon>query_stats</mat-icon></span>
+      </div>
+      <div class="kpi-value">
+        {{ s.promedio_irpc === null ? '—' : (s.promedio_irpc | number: '1.0-1') }}
+        <small>/ 100</small>
+      </div>
+      <div class="kpi-note">Mayor puntaje, menor riesgo</div>
+    </section>
+  </div>
+}

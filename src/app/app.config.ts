@@ -4,7 +4,9 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { registerLocaleData } from '@angular/common';
 import localeEs from '@angular/common/locales/es-CO';
 import { routes } from './app.routes';
-import { jwtInterceptor, errorInterceptor, loadingInterceptor } from './core/auth/interceptors';
+import { jwtInterceptor } from './core/auth/interceptors/jwt.interceptor';
+import { errorInterceptor } from './core/interceptors/error.interceptor';
+import { loadingInterceptor } from './core/interceptors/loading.interceptor';
 registerLocaleData(localeEs);
 export const appConfig: ApplicationConfig = {
   providers: [

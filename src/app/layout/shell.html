@@ -38,11 +38,7 @@
           ><mat-icon>{{ link.icon }}</mat-icon
           ><span>{{ link.label }}</span>
           @if (link.path === '/alertas') {
-            @if (alerts.summary$ | async; as summary) {
-              @if (summary.no_leidas) {
-                <span class="nav-count">{{ summary.no_leidas }}</span>
-              }
-            }
+            <app-alerta-badge variant="nav" />
           }
         </a>
       }
@@ -73,17 +69,7 @@
       </div>
       <div class="top-actions">
         <span class="environment-label">Análisis de mercados</span>
-        @if (alerts.summary$ | async; as summary) {
-          <a
-            mat-icon-button
-            routerLink="/alertas"
-            [attr.aria-label]="'Alertas, ' + summary.no_leidas + ' sin leer'"
-            [matBadge]="summary.no_leidas"
-            [matBadgeHidden]="!summary.no_leidas"
-            matBadgeSize="small"
-            ><mat-icon>notifications_none</mat-icon></a
-          >
-        }
+        <app-alerta-badge />
         <div class="top-divider"></div>
         <button
           class="user-button"
@@ -105,7 +91,7 @@
     </header>
     <div class="global-loading">
       @if (loading.active()) {
-        <mat-progress-bar mode="indeterminate" aria-label="Cargando solicitudes" />
+        <app-loading-spinner variant="bar" />
       }
     </div>
     <main id="main-content" tabindex="-1" class="page-content"><router-outlet /></main>

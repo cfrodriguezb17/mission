@@ -1,0 +1,63 @@
+<div class="page-heading">
+  <div>
+    <span class="eyebrow">PERSPECTIVA REGIONAL</span>
+    <h1>Panorama de Latinoamérica</h1>
+    <p>Indicadores clave y riesgo país, en un solo lugar.</p>
+  </div>
+  <div class="heading-actions">
+    <span class="date-pill"
+      ><mat-icon>calendar_today</mat-icon>{{ today | date: 'd MMM, yyyy' }}</span
+    ><button mat-stroked-button (click)="load(); reloadTrends()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon>Actualizar
+    </button>
+  </div>
+</div>
+<ng-container *appRole="['ADMIN']">
+  <div class="admin-bar">
+    <span><mat-icon>admin_panel_settings</mat-icon>Administración de datos</span>
+    <div>
+      <button mat-button (click)="runJob('sync')" [disabled]="busy()">
+        {{ busy() ? 'Procesando…' : 'Sincronizar indicadores' }}</button
+      ><button mat-button (click)="runJob('risk')" [disabled]="busy()">Recalcular riesgos</button>
+    </div>
+  </div>
+</ng-container>
+@if (jobMessage()) {
+  <div class="notice info" role="status"><mat-icon>info_outline</mat-icon>{{ jobMessage() }}</div>
+}
+<app-page-state [loading]="loading()" [error]="error()" (retry)="load()" />
+@if (!loading() && !error()) {
+  @if (summary(); as s) {
+    <app-kpi-cards [summary]="s" />
+    @if (s.paises_con_datos_parciales) {
+      <div class="notice">
+        <mat-icon>info_outline</mat-icon>{{ s.paises_con_datos_parciales }} países tienen datos
+        parciales. Consulta la evidencia antes de tomar decisiones.
+      </div>
+    }
+  }
+  <div class="dashboard-grid">
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Mapa de riesgo país</h2>
+          <p>Una mirada al riesgo de la región</p>
+        </div>
+        <span class="pill">IRPC · 0–100</span>
+      </div>
+      <app-risk-map [countries]="map()" />
+    </section>
+    <app-tabla-ranking [ranking]="ranking()" />
+  </div>
+  <app-grafico-tendencias
+    [filters]="filters"
+    [countries]="countries()"
+    [trends]="trends()"
+    [trendLabels]="trendLabels()"
+    [trendSeries]="trendSeries()"
+    [trendNotice]="trendNotice()"
+    [trendLoading]="trendLoading()"
+    [trendError]="trendError()"
+    (retry)="reloadTrends()"
+  />
+}
