@@ -1,0 +1,117 @@
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
+<div class="app-frame">
+  @if (menuOpen()) {
+    <button
+      class="nav-overlay"
+      aria-label="Cerrar navegación"
+      (click)="menuOpen.set(false)"
+    ></button>
+  }
+  <aside
+    class="sidebar"
+    [class.open]="menuOpen()"
+    [cdkTrapFocus]="menuOpen()"
+    [cdkTrapFocusAutoCapture]="menuOpen()"
+  >
+    <button
+      mat-icon-button
+      class="drawer-close"
+      aria-label="Cerrar navegación"
+      (click)="menuOpen.set(false)"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+    <a routerLink="/dashboard" class="brand" aria-label="DataPulse Latam, inicio"
+      ><span class="brand-symbol"><mat-icon>stacked_line_chart</mat-icon></span
+      ><span>DataPulse<small>LATAM INTELLIGENCE</small></span></a
+    >
+    <div class="workspace-label">
+      <span class="workspace-dot"></span> Espacio de análisis
+      <span class="workspace-tag">LATAM</span>
+    </div>
+    <nav aria-label="Navegación principal">
+      @for (link of links; track link.path) {
+        @if (link.group) {
+          <div class="nav-label">{{ link.group }}</div>
+        }
+        <a [routerLink]="link.path" routerLinkActive="active"
+          ><mat-icon>{{ link.icon }}</mat-icon
+          ><span>{{ link.label }}</span>
+          @if (link.path === '/alertas') {
+            @if (alerts.summary$ | async; as summary) {
+              @if (summary.no_leidas) {
+                <span class="nav-count">{{ summary.no_leidas }}</span>
+              }
+            }
+          }
+        </a>
+      }
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="sidebar-note">
+        <mat-icon>insights</mat-icon><strong>Una región. Más perspectiva.</strong>
+        <p>Datos económicos para decisiones informadas.</p>
+      </div>
+      <div class="sidebar-footer">
+        <span class="workspace-dot"></span> Datos vía API <span>v1.0</span>
+      </div>
+    </div>
+  </aside>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="breadcrumb">
+        <button
+          mat-icon-button
+          class="menu-toggle"
+          aria-label="Abrir navegación"
+          [attr.aria-expanded]="menuOpen()"
+          (click)="menuOpen.set(!menuOpen())"
+        >
+          <mat-icon>menu</mat-icon></button
+        ><span>Espacio de trabajo</span><mat-icon>chevron_right</mat-icon
+        ><strong>{{ page() }}</strong>
+      </div>
+      <div class="top-actions">
+        <span class="environment-label">Análisis de mercados</span>
+        @if (alerts.summary$ | async; as summary) {
+          <a
+            mat-icon-button
+            routerLink="/alertas"
+            [attr.aria-label]="'Alertas, ' + summary.no_leidas + ' sin leer'"
+            [matBadge]="summary.no_leidas"
+            [matBadgeHidden]="!summary.no_leidas"
+            matBadgeSize="small"
+            ><mat-icon>notifications_none</mat-icon></a
+          >
+        }
+        <div class="top-divider"></div>
+        <button
+          class="user-button"
+          [matMenuTriggerFor]="userMenu"
+          aria-label="Abrir menú de usuario"
+        >
+          <span class="avatar">{{ initials() }}</span
+          ><span class="user-details"
+            ><strong>{{ auth.user()?.nombre_completo }}</strong
+            ><small>{{ auth.user()?.rol }}</small></span
+          ><mat-icon>expand_more</mat-icon></button
+        ><mat-menu #userMenu="matMenu"
+          ><a mat-menu-item routerLink="/perfil"><mat-icon>person_outline</mat-icon>Mi perfil</a
+          ><button mat-menu-item (click)="auth.logout()">
+            <mat-icon>logout</mat-icon>Cerrar sesión
+          </button></mat-menu
+        >
+      </div>
+    </header>
+    <div class="global-loading">
+      @if (loading.active()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Cargando solicitudes" />
+      }
+    </div>
+    <main id="main-content" tabindex="-1" class="page-content"><router-outlet /></main>
+    <footer class="main-footer">
+      <span>© DataPulse Latam · Inteligencia financiera</span
+      ><span>IRPC: un mayor puntaje indica menor riesgo</span>
+    </footer>
+  </div>
+</div>

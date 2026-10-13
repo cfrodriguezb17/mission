@@ -1,0 +1,192 @@
+<a routerLink="/paises" class="back-link"><mat-icon>arrow_back</mat-icon>Todos los países</a
+><app-page-state [loading]="loading()" [error]="error()" (retry)="load()" />
+@if (!loading() && !error()) {
+  @if (country(); as c) {
+    <div class="page-heading">
+      <div>
+        <span class="eyebrow">PERFIL DE MERCADO · {{ c.codigo_iso }}</span>
+        <h1>
+          <span aria-hidden="true">{{ flag(c.codigo_iso) }}</span> {{ c.nombre }}
+        </h1>
+        <p>Indicadores económicos y evolución del riesgo país.</p>
+      </div>
+      @if (current(); as risk) {
+        <app-risk-badge [level]="risk.nivel_riesgo" />
+      }
+    </div>
+    <section class="panel section-gap">
+      <div class="info-row">
+        @if (c.bandera_url) {
+          <img
+            [ngSrc]="c.bandera_url"
+            width="56"
+            height="38"
+            [alt]="'Bandera de ' + c.nombre"
+            style="object-fit: contain"
+          />
+        }
+        <div>
+          Moneda<strong>{{ c.moneda_nombre }} ({{ c.moneda_codigo }})</strong>
+        </div>
+        <div>
+          Región<strong>{{ label(c.region) }}</strong>
+        </div>
+        <div>
+          Población<strong>{{
+            c.poblacion === null ? 'Sin datos' : (c.poblacion | number)
+          }}</strong>
+        </div>
+        <div>
+          Coordenadas<strong
+            >{{ c.latitud | number: '1.1-2' }}, {{ c.longitud | number: '1.1-2' }}</strong
+          >
+        </div>
+      </div>
+    </section>
+    <div class="section-gap">
+      @if (simulated()) {
+        <div class="notice">
+          <mat-icon>info_outline</mat-icon>Este país contiene datos simulados de demostración.
+          Consulta fuente y año en cada indicador.
+        </div>
+      }
+      @if (current()?.detalle_calculo?.datos_parciales) {
+        <div class="notice">
+          <mat-icon>warning_amber</mat-icon>El IRPC se calculó con datos parciales; un puntaje alto
+          no elimina la incertidumbre.
+        </div>
+      }
+    </div>
+    <div class="metrics-grid">
+      @for (item of latest(); track item.type.code) {
+        <section class="panel">
+          <p class="metric-label">{{ item.type.label }}</p>
+          <div class="metric-value">
+            {{ item.value ? (item.value.valor | number: '1.0-2') : '—'
+            }}<small class="small">{{ item.value?.unidad === 'PORCENTAJE' ? '%' : '' }}</small>
+          </div>
+          <p class="metric-unit">
+            {{ item.value ? item.value.unidad + ' · ' + item.value.anio : 'Sin datos disponibles' }}
+          </p>
+          @if (item.value) {
+            <span class="pill"
+              >{{ item.value.fuente }}{{ item.value.es_simulado ? ' · Simulado' : '' }}</span
+            >
+          }
+        </section>
+      }
+    </div>
+    <div class="two-column">
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Histórico de indicadores</h2>
+          <mat-form-field class="compact-field" appearance="outline"
+            ><mat-label>Indicador</mat-label
+            ><mat-select [formControl]="selector">
+              @for (item of catalog; track item.code) {
+                <mat-option [value]="item.code">{{ item.label }}</mat-option>
+              }
+            </mat-select></mat-form-field
+          >
+        </div>
+        <app-chart
+          title="Histórico de indicadores"
+          [labels]="indicatorLabels()"
+          [series]="indicatorSeries()"
+        />
+      </section>
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Tipo de cambio</h2>
+            <p>Últimos 30 días · USD por {{ c.moneda_codigo }}</p>
+          </div>
+        </div>
+        @if (exchanges().length) {
+          <app-chart
+            title="Tipo de cambio"
+            [labels]="exchangeLabels()"
+            [series]="exchangeSeries()"
+          />
+          @if (c.moneda_codigo === 'USD') {
+            <p class="small muted">Identidad USD/USD calculada. No es una cotización descargada.</p>
+          }
+        } @else {
+          <app-page-state [empty]="true" emptyTitle="No hay cotizaciones en este período" />
+        }
+      </section>
+    </div>
+    <div class="two-column">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Índice de riesgo país</h2>
+            <p>IRPC = económico × 40 % + cambiario × 30 % + estabilidad × 30 %</p>
+          </div>
+        </div>
+        @if (current(); as risk) {
+          <div class="risk-score">
+            <span
+              >Índice compuesto<small class="muted" style="display: block"
+                >Mayor puntaje, menor riesgo</small
+              ></span
+            >
+            <div>
+              <strong>{{ risk.indice_compuesto | number: '1.0-2' }}</strong> / 100
+            </div>
+          </div>
+          @for (score of scores(); track score.label) {
+            <div class="risk-score">
+              <div>
+                {{ score.label }} <span class="small muted">{{ score.weight }}</span>
+                <div class="risk-progress"><i [style.width.%]="number(score.value)"></i></div>
+              </div>
+              <strong>{{ score.value | number: '1.0-1' }}</strong>
+            </div>
+          }
+          <p class="small muted section-gap">
+            Calculado el {{ risk.fecha_calculo | date: 'medium' }}
+          </p>
+          <details class="small">
+            <summary>Ver evidencia del cálculo</summary>
+            <pre class="evidence">{{ evidence(risk.detalle_calculo) }}</pre>
+          </details>
+        } @else {
+          <app-page-state [empty]="true" emptyTitle="No hay índice calculado" />
+        }
+      </section>
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Histórico IRPC</h2>
+          <span class="pill">{{ history().length }} registros</span>
+        </div>
+        <div class="table-scroll history-table">
+          <table>
+            <caption class="sr-only">
+              Histórico de riesgo país
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">FECHA</th>
+                <th scope="col">IRPC</th>
+                <th scope="col">NIVEL</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of history(); track r.id) {
+                <tr>
+                  <td>{{ r.fecha_calculo | date: 'short' }}</td>
+                  <td class="score-cell">{{ r.indice_compuesto | number: '1.0-2' }}</td>
+                  <td><app-risk-badge [level]="r.nivel_riesgo" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (!history().length) {
+          <app-page-state [empty]="true" />
+        }
+      </section>
+    </div>
+  }
+}

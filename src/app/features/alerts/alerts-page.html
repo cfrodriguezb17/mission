@@ -1,0 +1,102 @@
+<div class="page-heading">
+  <div>
+    <span class="eyebrow">SEGUIMIENTO DEL MERCADO</span>
+    <h1>Centro de alertas</h1>
+    <p>Identifica cambios relevantes y mantente al tanto de la región.</p>
+  </div>
+  <button mat-stroked-button (click)="readAll()" [disabled]="busy()">
+    <mat-icon>done_all</mat-icon>Marcar todas como leídas
+  </button>
+</div>
+@if (api.summary$ | async; as summary) {
+  <div class="notice info">
+    <mat-icon>notifications_none</mat-icon>{{ summary.no_leidas }} alertas sin leer de
+    {{ summary.total }} disponibles. Las lecturas son personales.
+  </div>
+}
+<form class="filter-bar" [formGroup]="filters">
+  <mat-form-field appearance="outline"
+    ><mat-label>Estado de lectura</mat-label
+    ><mat-select formControlName="leida"
+      ><mat-option value="">Todas</mat-option><mat-option value="false">Sin leer</mat-option
+      ><mat-option value="true">Leídas</mat-option></mat-select
+    ></mat-form-field
+  ><mat-form-field appearance="outline"
+    ><mat-label>Tipo de alerta</mat-label
+    ><mat-select formControlName="tipo_alerta"
+      ><mat-option value="">Todos los tipos</mat-option
+      ><mat-option value="RIESGO">Riesgo</mat-option
+      ><mat-option value="TIPO_CAMBIO">Tipo de cambio</mat-option
+      ><mat-option value="INDICADOR">Indicadores</mat-option></mat-select
+    ></mat-form-field
+  ><mat-form-field appearance="outline"
+    ><mat-label>Severidad</mat-label
+    ><mat-select formControlName="severidad"
+      ><mat-option value="">Todas</mat-option><mat-option value="INFO">Información</mat-option
+      ><mat-option value="WARNING">Advertencia</mat-option
+      ><mat-option value="CRITICAL">Crítica</mat-option></mat-select
+    ></mat-form-field
+  >
+</form>
+<app-page-state
+  [loading]="loading()"
+  [error]="error()"
+  [empty]="!loading() && !error() && !data()?.count"
+  emptyTitle="No hay alertas con estos filtros"
+  emptyMessage="Los cambios relevantes del mercado aparecerán aquí."
+  (retry)="reload.next()"
+/>
+@if (!loading() && !error() && data()?.count) {
+  <section class="panel" aria-label="Listado de alertas">
+    @for (alert of data()?.results; track alert.id) {
+      <article class="alert-item" [class.read]="alert.leida">
+        <span class="alert-icon" [attr.data-severity]="alert.severidad"
+          ><mat-icon>{{
+            alert.severidad === 'CRITICAL'
+              ? 'error_outline'
+              : alert.severidad === 'WARNING'
+                ? 'warning_amber'
+                : 'info_outline'
+          }}</mat-icon></span
+        >
+        <div class="alert-content">
+          <h2>
+            {{ alert.titulo }}
+            @if (!alert.leida) {
+              <span class="unread-dot" role="img" aria-label="Sin leer"></span>
+            }
+          </h2>
+          <p>{{ alert.mensaje }}</p>
+          <div class="alert-meta">
+            <span class="pill">{{ label(alert.severidad) }}</span
+            ><span>{{ label(alert.tipo_alerta) }}</span
+            ><a [routerLink]="['/paises', alert.pais]">{{ alert.pais }}</a
+            ><time [attr.datetime]="alert.fecha_creacion">{{
+              alert.fecha_creacion | date: 'medium'
+            }}</time>
+          </div>
+        </div>
+        @if (!alert.leida) {
+          <button
+            mat-button
+            (click)="read(alert)"
+            [disabled]="busy()"
+            [attr.aria-label]="'Marcar como leída: ' + alert.titulo"
+          >
+            <mat-icon>done</mat-icon>Leída
+          </button>
+        }
+      </article>
+    }
+  </section>
+}
+@if (!loading() && !error()) {
+  <mat-paginator
+    [length]="data()?.count ?? 0"
+    [pageIndex]="page"
+    [pageSize]="20"
+    hidePageSize
+    aria-label="Paginación de alertas"
+    (page)="paginate($event)"
+  />
+}
