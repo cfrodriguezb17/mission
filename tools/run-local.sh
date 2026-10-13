@@ -33,7 +33,7 @@ BACKEND_PYTHON="$BACKEND_DIR/.venv/bin/python"
 [[ -x "$BACKEND_PYTHON" ]] || fail 'Falta backend/.venv. Crea el entorno Python e instala las dependencias del backend.'
 [[ -r "$BACKEND_DIR/.env" ]] || fail 'Falta backend/.env. Copia .env.example y configura PostgreSQL.'
 [[ -x "$FRONTEND_DIR/node_modules/.bin/ng" ]] || fail 'Faltan las dependencias del frontend. Ejecuta pnpm install --frozen-lockfile en frontend.'
-"$BACKEND_PYTHON" -c 'import django, rest_framework, psycopg, corsheaders' || fail 'El entorno Python está incompleto. Instala backend/requirements-dev.txt.'
+"$BACKEND_PYTHON" -c 'import django, rest_framework, psycopg, psycopg_pool, corsheaders, uvicorn, uvloop, httptools, channels, channels_redis' || fail 'El entorno Python está incompleto. Instala backend/requirements-dev.txt.'
 
 # Solo afecta a estos procesos; Django lee el resto de variables desde backend/.env.
 export DJANGO_DEBUG=true
@@ -41,6 +41,7 @@ export DJANGO_SECURE_SSL_REDIRECT=false
 export DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 export CORS_ALLOWED_ORIGINS=http://localhost:4200,http://127.0.0.1:4200
 export PYTHONUNBUFFERED=1
+export DJANGO_DB_CONN_MAX_AGE=0
 
 "$BACKEND_PYTHON" - <<'PY'
 import socket
@@ -104,7 +105,7 @@ wait_ready() {
 printf '\nIniciando Django…\n'
 (
   cd -- "$BACKEND_DIR"
-  exec setsid "$BACKEND_PYTHON" manage.py runserver 127.0.0.1:8000
+  exec setsid "$BACKEND_PYTHON" -m uvicorn backend.asgi:application --host 127.0.0.1 --port 8000 --reload --loop uvloop --http httptools --lifespan off --no-proxy-headers --ws-max-size 16384
 ) &
 service_pids+=("$!")
 wait_ready Backend "${service_pids[0]}" http://127.0.0.1:8000/health/

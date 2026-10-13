@@ -28,7 +28,7 @@ Desde `backend`, siguiendo su [README](../backend/README.md):
 ```bash
 python manage.py migrate
 python manage.py seed_data
-python manage.py runserver 127.0.0.1:8000
+python -m uvicorn backend.asgi:application --host 127.0.0.1 --port 8000 --reload --lifespan off --no-proxy-headers
 ```
 
 En `backend/.env`, habilitar el origen donde se abre el navegador:
