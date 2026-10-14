@@ -18,7 +18,7 @@ import uuid
 
 FRONTEND = Path(__file__).resolve().parents[1]
 BACKEND = FRONTEND.parent / 'backend'
-OUTPUT = FRONTEND / 'docs/realtime-20261013'
+OUTPUT = FRONTEND / 'output/realtime'
 
 
 def free_port():
@@ -160,7 +160,7 @@ def main():
                         if browser_process.poll() is None:
                             raise TimeoutError('El navegador superó el plazo de prueba.')
                         if browser_process.returncode:
-                            raise RuntimeError('Falló la prueba; revisar docs/realtime-20261013/live-browser.log')
+                            raise RuntimeError('Falló la prueba; revisar output/realtime/live-browser.log')
                         result = json.loads((scratch / 'browser-result.json').read_text())
                         result.update(workers=2, database='PostgreSQL temporal', redis='Redis temporal')
                     finally:

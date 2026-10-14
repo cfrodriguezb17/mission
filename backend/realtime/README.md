@@ -128,7 +128,7 @@ consultar REST para recuperar el estado. Su caída no revierte las escrituras en
 PostgreSQL; nuevas conexiones SSE devuelven 503. El proxy debe admitir WebSockets
 y no almacenar/bufferizar SSE. El frontend Angular conecta la campanita, el centro
 de alertas y el dashboard a estos avisos, con reconexión y recuperación por REST.
-[Integración y pruebas de navegador](../../frontend/docs/realtime-20261013/INFORME.md).
+[Guía de pruebas](../../docs/PRUEBAS.md).
 
 ## Verificación
 
@@ -140,6 +140,4 @@ python manage.py verify_migrations
 Las pruebas lanzan Uvicorn con dos workers, Redis temporal y PostgreSQL de prueba.
 Comprueban entrega incremental, privacidad, commit/rollback, JWT/origen, revocación,
 mensajes inválidos, caída de Redis y CRUD concurrente/PDF bajo ASGI.
-[Resultados y benchmark HTTP reproducible](../docs/asgi-realtime-20261013/INFORME.md).
-
-[Ajuste posterior de rendimiento y mediciones por separado](../docs/asgi-tuning-20261013/INFORME.md).
+[Configuración de producción](../../deployment/RAILWAY.md).

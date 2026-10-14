@@ -162,8 +162,8 @@ si responde 200 con `disponible: false`; un fallo de red, 401/403/404 o 429 no
 equivale a nombre libre. La consulta **no reserva** el nombre: POST/PUT mantienen
 validación y restricción única, y pueden devolver 400 en `nombre` si otra petición
 ocupa el nombre antes de guardar. Conservar también el tratamiento de versión 409.
-El frontend actual aún no implementa el formulario; este contrato permite su
-integración sin inferir unicidad desde el listado de portafolios activos.
+El frontend aplica este contrato al crear y editar; no infiere unicidad desde
+el listado de portafolios activos.
 
 Toda modificación envía la versión del portafolio; posiciones comparten esa
 versión. Un éxito la incrementa. Conflicto devuelve 409; recargar y revisar antes
@@ -191,8 +191,8 @@ null; un valor económico cero se conserva.
 ## Contratos transversales
 
 Listados usan `count`, `next`, `previous`, `results`; `page_size` por defecto 20,
-máximo 100. Ordenamientos inválidos devuelven 400. Campos permitidos detallados
-en los README de cada módulo; `search` en países y portafolios. Booleanos query
+máximo 100. Ordenamientos inválidos devuelven 400; `search` está disponible en países y
+portafolios. Booleanos query
 aceptan las cadenas exactas `true` y `false`.
 
 Errores incluyen `error: {codigo, mensaje, detalles}`. Por compatibilidad se
@@ -221,11 +221,10 @@ Un resultado vacío sin errores conserva 200. Los errores de persistencia se
 traducen a mensajes seguros en español, sin publicar nombres de tablas,
 restricciones, SQL ni textos originales de excepciones de la base de datos.
 
-Throttling DRF: 100/min por usuario
-y 20/min por IP anónima; 429 conserva `Retry-After`. La caché local de desarrollo
-es en memoria; producción usa archivo compartido entre workers de una instancia.
-Los contadores DRF son aproximados ante concurrencia; múltiples instancias
-necesitan una caché centralizada para compartir el límite.
+Throttling DRF: 100/min por usuario y 20/min por IP anónima; 429 conserva
+`Retry-After`. Con Redis configurado y DJANGO_THROTTLE_REDIS=true, los contadores
+se comparten entre instancias; se conserva fallback local. Los contadores DRF
+son aproximados ante concurrencia.
 
 Por defecto `DJANGO_NUM_PROXIES=0`: la identidad anónima usa `REMOTE_ADDR` e
 ignora `X-Forwarded-For`. Alterar esa cabecera no reinicia el contador. Detrás

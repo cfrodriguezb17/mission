@@ -1,9 +1,8 @@
 # IRPC — fórmula irpc-v1
 
-Implementado el 8 de octubre de 2026. Contrastado con la sección 1.4 del archivo
-`/home/charlie/Downloads/prueba.md`: el algoritmo resta 10 puntos por inflación
-de 9,2 %, mientras su ejemplo resta 25. Se adopta el algoritmo; la discrepancia
-del ejemplo queda documentada y no se cambia la fórmula para reproducir su 69.
+La fórmula sigue el algoritmo del enunciado. Para inflación de 9,2 %, este resta
+10 puntos, aunque el ejemplo original resta 25. Se adopta el algoritmo y se
+documentan las ambigüedades para que el cálculo sea reproducible.
 
 ## Fórmula
 

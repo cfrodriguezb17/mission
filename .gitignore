@@ -18,3 +18,11 @@ coverage/
 playwright-report/
 test-results/
 .DS_Store
+
+# Personal settings and generated evidence
+.codex/
+.vscode/
+.idea/
+*.log
+*.bundle
+__screenshots__/

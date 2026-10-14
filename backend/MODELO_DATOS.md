@@ -7,8 +7,8 @@ Estado: **modelo de dominio implementado**. Están implementados `accounts.User`
 `countries.Moneda`, `countries.Pais`, `economics.TipoIndicador`,
 `economics.IndicadorEconomico`, `economics.TipoCambio`, `risk.IndiceRiesgo`,
 `alerts.Alerta`, `alerts.LecturaAlerta`, `portfolios.Portafolio` y
-`portfolios.Posicion` y `audit.LogActividad`, con migraciones aplicadas en la base
-local. La validación y conservación de registros se documentan en README.
+`portfolios.Posicion` y `audit.LogActividad`, con migraciones versionadas. La instalación y aplicación de migraciones se
+documentan en README.
 Dashboard y reporting están implementados como consumidores sin tablas propias.
 Diagrama SVG generado desde los modelos en [modelo-normalizado](docs/modelo-normalizado.svg).
 Los nombres de tablas son lógicos; Django podrá
@@ -67,8 +67,7 @@ con `0002_remove_username`, adaptando manager, serializer, admin y pruebas;
 los formularios personalizados ya usan email. La migración se aplicó conservando
 los usuarios existentes y la migración inicial. Moneda y Pais también están
 implementados, al igual que los tres modelos de economics, IndiceRiesgo,
-Alerta, LecturaAlerta, Portafolio y Posicion;
-las demás tablas siguen en diseño.
+Alerta, LecturaAlerta, Portafolio, Posicion y LogActividad.
 
 Los permisos de Django y el rol de negocio son conceptos distintos: ser
 superusuario no equivale automáticamente a tener el rol ADMIN.
@@ -263,28 +262,7 @@ mantiene los históricos requeridos.
 
 IRPC usa la fórmula transcrita por el usuario de la sección 1.4 del enunciado;
 las reglas y decisiones de `irpc-v1` están en [risk/README.md](risk/README.md).
-El contraste con prueba.md confirma una discrepancia: 9,2 % penaliza 10 puntos
+El enunciado contiene una discrepancia: 9,2 % penaliza 10 puntos
 en el algoritmo y 25 en el ejemplo. Se aplica el algoritmo y se documenta un
 ejemplo coherente. Los cuatro decimales usan precisión (5, 2), con
 checks 0–100, versión no vacía e índice (pais, fecha_calculo).
-
-## Orden de implementación posterior
-
-1. **Completado:** migración incremental de Usuario para eliminar username y adaptar sus consumidores.
-2. **Completado:** countries: Moneda y Pais, migración, admin, API de lectura y datos de demostración.
-3. **Completado:** economics: TipoIndicador, IndicadorEconomico y TipoCambio.
-4. **Completado:** risk: IndiceRiesgo, cálculo, API, histórico y coordinación de sincronización.
-5. **Completado:** alerts: Alerta, LecturaAlerta, generación y API de lectura.
-6. **Completado:** portfolios: Portafolio, Posicion, permisos de colaboración,
-   versión compartida, validaciones, API, resumen y comando seed repetible.
-7. **Completado:** audit: LogActividad, eventos transaccionales, resúmenes de tareas y admin de consulta.
-8. **Completado:** reporting y dashboard sin tablas adicionales, con sus dependencias anteriores.
-9. **Completado localmente:** catálogos, datos de demostración y documentación.
-   Publicación y datos en nube pendientes de infraestructura.
-
-En paralelo, ampliar common de forma incremental con las necesidades compartidas
-de cada módulo, sus consumidores y comprobaciones, por decisión del usuario.
-Las reglas de negocio permanecen en sus módulos.
-
-No editar migraciones ya aplicadas ni reiniciar la base. Verificar las futuras
-migraciones con los datos existentes y con una base de pruebas desde cero.

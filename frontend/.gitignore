@@ -46,3 +46,6 @@ Thumbs.db
 # Browser verification artifacts
 /playwright-report/
 /test-results/
+
+# Generated verification output
+/output/
