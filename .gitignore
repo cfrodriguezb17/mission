@@ -1,0 +1,20 @@
+# Entornos locales y secretos
+.env
+.env.*
+!.env.example
+!.env.railway.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+node_modules/
+dist/
+.angular/
+.cache/
+staticfiles/
+output/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
