@@ -51,7 +51,9 @@ No se modifican SQL ni límites globales de PostgreSQL.
 
 Usa `acount()` y conserva visibilidad/lecturas por usuario. Los nuevos endpoints
 son vistas Django async. El CRUD existente mantiene sus transacciones, bloqueos
-y DRF síncrono, adaptado por Django a ASGI. Cambiar de servidor no hace async
+y DRF síncrono, ejecutados en un solo tramo de middleware/vista/renderizado
+dentro de ASGI. Las vistas async conservan el handler nativo.
+`DJANGO_ASGI_SYNC_REST=false` desactiva esa agrupación del CRUD. Cambiar de servidor no hace async
 automáticamente todas las vistas ni garantiza una reducción de latencia.
 
 ## WebSocket en un navegador
@@ -138,3 +140,5 @@ Las pruebas lanzan Uvicorn con dos workers, Redis temporal y PostgreSQL de prueb
 Comprueban entrega incremental, privacidad, commit/rollback, JWT/origen, revocación,
 mensajes inválidos, caída de Redis y CRUD concurrente/PDF bajo ASGI.
 [Resultados y benchmark HTTP reproducible](../docs/asgi-realtime-20261013/INFORME.md).
+
+[Ajuste posterior de rendimiento y mediciones por separado](../docs/asgi-tuning-20261013/INFORME.md).

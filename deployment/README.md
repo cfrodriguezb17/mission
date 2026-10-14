@@ -23,6 +23,7 @@ Variables de producción:
 | DJANGO_SECRET_KEY | Secreto aleatorio propio del entorno. |
 | DJANGO_ALLOWED_HOSTS | Dominio del backend, sin esquema ni rutas. |
 | POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT | Credenciales del PostgreSQL administrado. |
+| DJANGO_ASGI_SYNC_REST | true por defecto: agrupa middleware, vista y renderizado de la API síncrona en un único tramo dentro de ASGI. false desactiva esa agrupación. |
 | DJANGO_DB_CONN_MAX_AGE | 0 obligatorio en ASGI; el script de arranque lo establece. |
 | DJANGO_DB_POOL | true por defecto: pool físico de psycopg por worker. |
 | DJANGO_DB_POOL_MIN_SIZE, DJANGO_DB_POOL_MAX_SIZE | 1 y 4 por defecto; mínimo >= 0, máximo >= 1. |
@@ -96,6 +97,13 @@ alcanzar el umbral. Las sentencias y su caché son locales a la conexión Postgr
 pooler externo no admite sentencias preparadas del protocolo PostgreSQL; verificar
 su modo y configuración antes de habilitarlas. La conexión directa a PostgreSQL
 no necesita PgBouncer. El pool local no reemplaza al límite global del proveedor.
+
+La API DRF síncrona conserva transacciones y bloqueos, ejecutando su cadena en
+un solo tramo dentro de un hilo. Las vistas async usan el handler ASGI nativo;
+se detecta el tipo de vista, sin exigir que esté bajo `/api/realtime/`.
+WhiteNoise conserva estáticos y admite ambas rutas. Este ajuste usa la cadena
+de middleware de Django 5.2; verificar suite y rendimiento al actualizar Django.
+[Mediciones aisladas y carga mixta](../docs/asgi-tuning-20261013/INFORME.md).
 
 ## WebSockets y streaming
 

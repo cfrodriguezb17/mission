@@ -220,7 +220,7 @@ permisos, faltantes, umbrales, concurrencia, PDF y validaciones.
 la elimina al pasar y la conserva ante fallos para diagnóstico. `--fresh` genera
 accounts en un paquete temporal, sin modificar migraciones del repositorio.
 
-Última suite global comprobada: **364 pruebas correctas en PostgreSQL, 13 de
+Última suite global comprobada: **374 pruebas correctas en PostgreSQL, 13 de
 octubre de 2026**, con migraciones originales desde cero y base temporal eliminada.
 Las optimizaciones reducen de 5 a 2 las consultas de serialización del portafolio
 medido y de 6 a 4 las del selector del dashboard, conservando respuestas iguales.
@@ -317,3 +317,9 @@ Configurar Redis para comunicar los workers. Las escrituras transaccionales
 existentes conservan su implementación síncrona, adaptada por Django a ASGI.
 [Uso y configuración](realtime/README.md), [despliegue](deployment/README.md) y
 [pruebas y mediciones](docs/asgi-realtime-20261013/INFORME.md).
+
+El ajuste posterior agrupa middleware, vista y renderizado de la API síncrona
+en un solo tramo dentro de ASGI y mantiene el handler nativo para vistas async.
+WhiteNoise admite ambas rutas. Se verificaron 374 pruebas y se midieron los
+factores por separado, incluyendo REST con WebSockets/SSE abiertos.
+[Resultados, límites y reproducción](docs/asgi-tuning-20261013/INFORME.md).

@@ -1,6 +1,7 @@
 """HTTP, SSE y WebSockets reales, con Redis y PostgreSQL temporales."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+import gzip
 import http.client
 from io import StringIO
 import json
@@ -60,8 +61,15 @@ class UvicornRealtimeTests(TransactionTestCase):
             probe.bind(('127.0.0.1', 0))
             self.port = probe.getsockname()[1]
         heartbeat = 15 if self._testMethodName == 'test_idle_connections_survive_blocking_redis_reads' else 0.2
-        (self.folder / 'uvicorn_test_settings.py').write_text(
-            f'from backend.settings import *\nREALTIME_HEARTBEAT = {heartbeat}\n')
+        source = f'from backend.settings import *\nREALTIME_HEARTBEAT = {heartbeat}\n'
+        if self._testMethodName == 'test_static_files_under_asgi':
+            static_root = self.folder / 'static'
+            static_root.mkdir()
+            self.css = b'body { color: blue; }\n' * 50
+            (static_root / 'test.css').write_bytes(self.css)
+            (static_root / 'test.css.gz').write_bytes(gzip.compress(self.css))
+            source += f'STATIC_ROOT = {str(static_root)!r}\n'
+        (self.folder / 'uvicorn_test_settings.py').write_text(source)
         env = {**os.environ, 'DJANGO_SETTINGS_MODULE': 'uvicorn_test_settings',
                'PYTHONPATH': str(self.folder) + os.pathsep + str(settings.BASE_DIR),
                'POSTGRES_DB': config['NAME'], 'POSTGRES_USER': config['USER'],
@@ -72,11 +80,14 @@ class UvicornRealtimeTests(TransactionTestCase):
                'DJANGO_DB_CONN_MAX_AGE': '0', 'DJANGO_DB_POOL': 'true',
                'DJANGO_DB_POOL_MIN_SIZE': '1', 'DJANGO_DB_POOL_MAX_SIZE': '4',
                'DJANGO_DB_PREPARE_THRESHOLD': '2',
+               'DJANGO_ASGI_SYNC_REST': 'true',
                'DJANGO_REALTIME_REDIS_URL': url, 'DJANGO_REALTIME_PREFIX': self.prefix,
                'DJANGO_REDIS_URL': url, 'DJANGO_DATA_CACHE_PREFIX': self.prefix + ':data',
                'DJANGO_CACHE_LOCATION': str(self.folder / 'cache')}
         if self._testMethodName == 'test_missing_redis_keeps_summary_available':
             env.update(DJANGO_REALTIME_REDIS_URL='', DJANGO_REDIS_URL='')
+        if self._testMethodName == 'test_rollback_mode_preserves_http_and_realtime':
+            env['DJANGO_ASGI_SYNC_REST'] = 'false'
         self.log = (self.folder / 'server.log').open('w')
         self.addCleanup(self.log.close)
         self.process = subprocess.Popen([
@@ -321,3 +332,59 @@ class UvicornRealtimeTests(TransactionTestCase):
         self.assertTrue(pdf.startswith(b'%PDF'))
         self.assertEqual(self.http('/api/portafolios/', token=self.token(self.viewer),
                                    method='POST', body={'nombre': 'Prohibido'})[0], 403)
+
+    def test_auth_profile_and_error_contracts_with_synchronous_api_under_asgi(self):
+        self.owner.set_password('Initial-password-2026!')
+        self.owner.save(update_fields=['password'])
+        status, tokens = self.http('/api/auth/login/', method='POST', token=None,
+            body={'email': self.owner.email, 'password': 'Initial-password-2026!'})
+        self.assertEqual(status, 200)
+        access = tokens['access']
+        self.assertEqual(self.http('/api/auth/me/', token=access)[1]['email'], self.owner.email)
+        self.assertEqual(self.http('/api/auth/me/', token=access, method='PUT',
+                                  body={'email': self.owner.email})[0], 400)
+        self.assertEqual(self.http('/api/not-a-real-endpoint/', token=access)[0], 404)
+        self.assertEqual(self.http('/api/paises/', token=access, method='DELETE')[0], 405)
+        self.assertEqual(self.http('/api/auth/me/', token=access, method='PUT', body={
+            'email': self.owner.email, 'nombre_completo': 'Nombre actualizado',
+            'password': 'Replacement-password-2026!'})[0], 200)
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.nombre_completo, 'Nombre actualizado')
+        self.assertEqual(self.http('/api/auth/me/', token=access)[0], 401)
+
+    def test_rollback_mode_preserves_http_and_realtime(self):
+        self.assertEqual(self.http('/api/paises/')[0], 200)
+        self.assertEqual(self.http('/api/realtime/resumen/')[0], 200)
+        with self.websocket() as ws:
+            self.next_ws(ws, 'conexion.lista')
+            client, response = self.sse()
+            self.next_sse(response, 'conexion.lista')
+            alert = self.alert(self.owner)
+            self.assertEqual(self.next_ws(ws, 'alerta.creada')['id'], alert.pk)
+            self.assertEqual(self.next_sse(response, 'alerta.creada')['id'], alert.pk)
+            client.close()
+
+    def test_static_files_under_asgi(self):
+        for method, headers, expected_status in (
+            ('GET', {}, 200), ('HEAD', {}, 200),
+            ('GET', {'Range': 'bytes=0-3'}, 206),
+            ('GET', {'Accept-Encoding': 'gzip'}, 200)):
+            with self.subTest(method=method, headers=headers):
+                client = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+                try:
+                    client.request(method, '/static/test.css', headers=headers)
+                    response = client.getresponse()
+                    body = response.read()
+                    self.assertEqual(response.status, expected_status)
+                    self.assertIn('public', response.getheader('Cache-Control'))
+                    if method == 'HEAD':
+                        self.assertEqual(body, b'')
+                    elif 'Range' in headers:
+                        self.assertEqual(body, self.css[:4])
+                    elif 'Accept-Encoding' in headers:
+                        self.assertEqual(response.getheader('Content-Encoding'), 'gzip')
+                        self.assertEqual(gzip.decompress(body), self.css)
+                    else:
+                        self.assertEqual(body, self.css)
+                finally:
+                    client.close()

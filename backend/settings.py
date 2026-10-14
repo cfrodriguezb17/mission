@@ -120,7 +120,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'common.middleware.RequestLoggingMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'common.static.AsyncWhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -148,6 +148,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 ASGI_APPLICATION = 'backend.asgi.application'
+ASGI_SYNC_REST = os.environ.get('DJANGO_ASGI_SYNC_REST', 'true').lower()
+if ASGI_SYNC_REST not in ('true', 'false'):
+    raise ValueError('DJANGO_ASGI_SYNC_REST debe ser true o false.')
+ASGI_SYNC_REST = ASGI_SYNC_REST == 'true'
 
 
 # Database

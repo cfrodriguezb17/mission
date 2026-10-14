@@ -8,7 +8,7 @@ from django.test import SimpleTestCase
 
 
 class DatabaseSettingsTests(SimpleTestCase):
-    def read_database(self, value=None, **overrides):
+    def read_settings(self, value=None, **overrides):
         # No leer secretos locales ni modificar el módulo de settings en uso.
         environment = {"DJANGO_DEBUG": "true"}
         if value is not None:
@@ -16,7 +16,16 @@ class DatabaseSettingsTests(SimpleTestCase):
         environment.update(overrides)
         with patch.dict(os.environ, environment, clear=True), patch("dotenv.load_dotenv"):
             config = runpy.run_path(str(Path(settings.BASE_DIR) / "backend" / "settings.py"))
-        return config["DATABASES"]["default"]
+        return config
+
+    def read_database(self, value=None, **overrides):
+        return self.read_settings(value, **overrides)["DATABASES"]["default"]
+
+    def test_asgi_sync_rest_default_and_rollback_configuration(self):
+        self.assertTrue(self.read_settings()['ASGI_SYNC_REST'])
+        self.assertFalse(self.read_settings(DJANGO_ASGI_SYNC_REST='false')['ASGI_SYNC_REST'])
+        with self.assertRaisesRegex(ValueError, 'DJANGO_ASGI_SYNC_REST'):
+            self.read_settings(DJANGO_ASGI_SYNC_REST='invalid')
 
     def test_default_uses_pool_and_prepared_statements_without_persistent_connections(self):
         config = self.read_database()
