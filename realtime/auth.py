@@ -4,7 +4,7 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 from rest_framework.exceptions import APIException
-from rest_framework.throttling import UserRateThrottle
+from common.throttling import UserRateThrottle
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 

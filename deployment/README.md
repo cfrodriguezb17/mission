@@ -11,8 +11,8 @@ Directorio del servicio: `backend` si se publica el repositorio conjunto; la ra�
 si se publica solo este repositorio backend. Build: `pip install -r requirements.txt`.
 Start: `sh deployment/start.sh`. Ejecuta migraciones incrementales, collectstatic
 y Uvicorn ASGI con 2 workers (configurable), uvloop y httptools. El cierre
-elegante espera hasta 90 segundos; cada worker admite hasta 32 conexiones/tareas
-HTTP simultáneas (configurable). Health: `/health/`.
+elegante espera hasta 90 segundos. Cada worker limita el trabajo HTTP activo
+por separado de los WebSockets, SSE y conexiones HTTP inactivas. Health: `/health/`.
 Seed es un paso explícito: `python manage.py seed_data`; no se ejecuta en cada arranque.
 
 Variables de producción:
@@ -42,13 +42,18 @@ Variables de producción:
 | DJANGO_REALTIME_REDIS_URL | Redis de eventos; usa DJANGO_REDIS_URL si no se define. |
 | DJANGO_REALTIME_PREFIX | Prefijo exclusivo de eventos por proyecto/entorno. |
 | PORT, WEB_CONCURRENCY | Puerto del proveedor y número de workers (2 por defecto). |
-| WEB_LIMIT_CONCURRENCY | Límite HTTP por worker; 32 por defecto. SSE ocupa una conexión mientras esté abierto. |
+| DJANGO_ASGI_HTTP_LIMIT | Trabajo HTTP activo por worker: 16. |
+| DJANGO_ASGI_HTTP_QUEUE, DJANGO_ASGI_ADMISSION_WAIT_MS | Hasta 64 solicitudes adicionales por worker, esperando como máximo 500 ms para entrar. |
+| DJANGO_ASGI_WEBSOCKET_LIMIT | Conexiones WebSocket admitidas por worker: 1024; no representa capacidad certificada. |
+| DJANGO_ASGI_STREAM_LIMIT | Streams SSE por worker: 16, con presupuesto independiente. |
+| DJANGO_THROTTLE_REDIS | true por defecto: usa Redis para throttling cuando existe DJANGO_REDIS_URL. false conserva almacenamiento local. |
+| DJANGO_THROTTLE_CACHE_PREFIX | Prefijo de contadores por proyecto y entorno; compartirlo entre las réplicas del mismo servicio. |
 
 El proveedor debe suministrar HTTPS y un proxy confiable. Confirmar que health
 recibe el protocolo correcto o permite seguir la redirección HTTPS. Los archivos
 estáticos del admin se sirven con WhiteNoise. PostgreSQL sigue siendo persistente
-y externo al contenedor. Para varias instancias, sustituir FileBasedCache por una
-caché compartida central y validar throttling; DRF no garantiza conteos estrictos
+y externo al contenedor. Con Redis configurado, los contadores normales de
+throttling se comparten entre instancias. DRF no garantiza conteos estrictos
 bajo concurrencia. No se considera autenticado un proxy por el simple encabezado.
 
 Con `DJANGO_NUM_PROXIES=0`, DRF usa `REMOTE_ADDR` e ignora `X-Forwarded-For`,
@@ -105,6 +110,29 @@ WhiteNoise conserva estáticos y admite ambas rutas. Este ajuste usa la cadena
 de middleware de Django 5.2; verificar suite y rendimiento al actualizar Django.
 [Mediciones aisladas y carga mixta](../docs/asgi-tuning-20261013/INFORME.md).
 
+## Admisión y tolerancia a fallos
+
+El arranque ya no pasa `--limit-concurrency` a Uvicorn: ese límite también cuenta
+conexiones TCP inactivas y puede bloquear REST mientras hay sockets abiertos.
+`WEB_LIMIT_CONCURRENCY` deja de usarse. La aplicación limita únicamente trabajo
+HTTP en curso; devuelve 503 con Retry-After al llenarse la cola o vencer la espera.
+Los presupuestos son **por worker**, no un límite compartido entre réplicas.
+`/health/` queda fuera del presupuesto de trabajo. Los streams y WebSockets tienen
+sus propios límites y conservan autenticación, permisos y auditoría.
+
+Si falla Redis de throttling, el worker abre un circuito durante 60 segundos y
+usa un FileBasedCache compartido por los workers de esa instancia. Conserva la
+última historia observada en una sombra local acotada a 10.000 claves. Así las
+consultas HTTP siguen disponibles durante la caída, pero el límite pasa a ser
+aproximado por instancia y puede perder precisión al cambiar de almacén. Si
+fallan ambos almacenes, devuelve 503. Esto no reemplaza un límite de tráfico en
+el proxy. Sin Redis de eventos, las notificaciones no están disponibles; el
+frontend debe recuperar el estado mediante REST al reconectar.
+
+El máximo de sockets configurado es una protección de recursos: medir usuarios
+navegando y notificaciones conjuntamente antes de dimensionar producción.
+[Experimentos y cuaderno de rendimiento](../docs/definitive-20261014/).
+
 ## WebSockets y streaming
 
 Configurar Redis y `CORS_ALLOWED_ORIGINS` con los orígenes reales del frontend.
@@ -130,9 +158,9 @@ PostgreSQL directamente. Los timeouts de conexión y lectura son de 0.5 segundos
 Se almacenan datos compartidos de países, mapa, tendencias y métricas comunes
 del dashboard; los conteos privados de cada usuario permanecen frescos. Las
 escrituras invalidan tras commit y el TTL limita la antigüedad si falla Redis.
-La caché no reemplaza permisos, auditoría ni throttling. El alias `default` de
-throttling conserva su configuración: centralizarlo también antes de escalar a
-varias instancias. No usar Redis como almacenamiento permanente de los datos.
+La caché no reemplaza permisos, auditoría ni throttling. El alias `default` usa
+Redis para throttling cuando hay URL y DJANGO_THROTTLE_REDIS=true, con un prefijo
+independiente del alias `data`. No usar Redis como almacenamiento permanente de los datos.
 
 [Implementación, invalidación y verificaciones](../docs/performance-medium-20261013/INFORME.md).
 

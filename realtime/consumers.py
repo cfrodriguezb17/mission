@@ -5,6 +5,7 @@ import time
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
 from redis.exceptions import RedisError
+from common.throttling import ThrottlingUnavailable
 
 from .auth import authenticate, bearer, rate_limit
 from .events import audit_connection, event_for, groups_for, join, leave
@@ -26,7 +27,12 @@ class NotificationsConsumer(AsyncJsonWebsocketConsumer):
         meta = {'REMOTE_ADDR': client[0]}
         if 'x-forwarded-for' in headers:
             meta['HTTP_X_FORWARDED_FOR'] = headers['x-forwarded-for']
-        if await rate_limit(self.user, meta=meta):
+        try:
+            wait = await rate_limit(self.user, meta=meta)
+        except ThrottlingUnavailable:
+            await self.close(code=1013)
+            return
+        if wait:
             await self.close(code=4429)
             return
         if not settings.REALTIME_ENABLED:

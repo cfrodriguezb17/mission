@@ -79,8 +79,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'EXCEPTION_HANDLER': 'common.exceptions.exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.AnonRateThrottle',
+        'common.throttling.UserRateThrottle',
+        'common.throttling.AnonRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {'user': '100/min', 'anon': '20/min'},
     'NUM_PROXIES': THROTTLE_NUM_PROXIES,
@@ -100,6 +100,29 @@ if DATA_CACHE_TTL < 0:
     raise ValueError('DJANGO_DATA_CACHE_TTL debe ser un entero mayor o igual a cero.')
 if REDIS_URL and not REDIS_URL.startswith(('redis://', 'rediss://', 'unix://')):
     raise ValueError('DJANGO_REDIS_URL debe usar redis://, rediss:// o unix://.')
+THROTTLE_REDIS = os.environ.get('DJANGO_THROTTLE_REDIS', 'true').lower()
+if THROTTLE_REDIS not in ('true', 'false'):
+    raise ValueError('DJANGO_THROTTLE_REDIS debe ser true o false.')
+THROTTLE_REDIS = bool(REDIS_URL) and THROTTLE_REDIS == 'true'
+if THROTTLE_REDIS:
+    CACHES['default'] = {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': REDIS_URL,
+        'KEY_PREFIX': os.environ.get('DJANGO_THROTTLE_CACHE_PREFIX',
+                                    'datapulse:throttle:' + os.environ.get('POSTGRES_DB', 'datapulse')),
+        'OPTIONS': {'socket_connect_timeout': 0.5, 'socket_timeout': 0.5},
+    }
+CACHES['throttle_fallback'] = {
+    'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+    'LOCATION': str(Path(os.environ.get('DJANGO_CACHE_LOCATION') or str(BASE_DIR / '.cache')) / 'throttle-fallback'),
+    'KEY_PREFIX': os.environ.get('DJANGO_THROTTLE_CACHE_PREFIX', 'datapulse:throttle:local'),
+    'OPTIONS': {'MAX_ENTRIES': 10000},
+}
+CACHES['throttle_shadow'] = {
+    'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    'LOCATION': 'datapulse-throttle-shadow',
+    'OPTIONS': {'MAX_ENTRIES': 10000},
+}
 CACHES['data'] = {
     'BACKEND': 'django.core.cache.backends.redis.RedisCache' if REDIS_URL else 'django.core.cache.backends.dummy.DummyCache',
     'LOCATION': REDIS_URL,
@@ -165,6 +188,13 @@ def env_integer(name, default, minimum=0):
     if value < minimum:
         raise ValueError(f'{name} debe ser un entero mayor o igual a {minimum}.')
     return value
+
+
+ASGI_HTTP_LIMIT = env_integer('DJANGO_ASGI_HTTP_LIMIT', 16, 1)
+ASGI_HTTP_QUEUE = env_integer('DJANGO_ASGI_HTTP_QUEUE', 64)
+ASGI_ADMISSION_WAIT_MS = env_integer('DJANGO_ASGI_ADMISSION_WAIT_MS', 500)
+ASGI_WEBSOCKET_LIMIT = env_integer('DJANGO_ASGI_WEBSOCKET_LIMIT', 1024, 1)
+ASGI_STREAM_LIMIT = env_integer('DJANGO_ASGI_STREAM_LIMIT', 16, 1)
 
 
 DB_CONN_MAX_AGE = env_integer('DJANGO_DB_CONN_MAX_AGE', 0)

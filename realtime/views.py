@@ -9,6 +9,7 @@ from redis.exceptions import RedisError
 
 from alerts.selectors import alertas_visibles
 from common.exceptions import error_payload
+from common.throttling import ThrottlingUnavailable
 from countries.models import Pais
 from .auth import authenticate, bearer, rate_limit
 from .events import audit_connection, event_for, groups_for, join, leave
@@ -25,7 +26,10 @@ async def authorized(request):
     if user is None:
         return None, error(401, **{'WWW-Authenticate': 'Bearer'})
     request.user = user
-    wait = await rate_limit(user, meta=request.META)
+    try:
+        wait = await rate_limit(user, meta=request.META)
+    except ThrottlingUnavailable:
+        return None, error(503, **{'Retry-After': '1'})
     if wait:
         return None, error(429, **{'Retry-After': str(wait)})
     return user, None

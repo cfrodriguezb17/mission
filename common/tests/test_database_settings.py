@@ -27,6 +27,19 @@ class DatabaseSettingsTests(SimpleTestCase):
         with self.assertRaisesRegex(ValueError, 'DJANGO_ASGI_SYNC_REST'):
             self.read_settings(DJANGO_ASGI_SYNC_REST='invalid')
 
+    def test_admission_and_shared_throttle_configuration(self):
+        config = self.read_settings(DJANGO_REDIS_URL='redis://localhost:6379/0')
+        self.assertEqual(config['ASGI_HTTP_LIMIT'], 16)
+        self.assertEqual(config['ASGI_WEBSOCKET_LIMIT'], 1024)
+        self.assertEqual(config['CACHES']['default']['BACKEND'], 'django.core.cache.backends.redis.RedisCache')
+        self.assertIn('datapulse:throttle:', config['CACHES']['default']['KEY_PREFIX'])
+        fallback = self.read_settings(DJANGO_REDIS_URL='redis://localhost:6379/0', DJANGO_THROTTLE_REDIS='false')
+        self.assertEqual(fallback['CACHES']['default']['BACKEND'], 'django.core.cache.backends.locmem.LocMemCache')
+        for options in ({'DJANGO_ASGI_HTTP_LIMIT': '0'}, {'DJANGO_ASGI_HTTP_QUEUE': '-1'},
+                        {'DJANGO_ASGI_WEBSOCKET_LIMIT': '0'}, {'DJANGO_THROTTLE_REDIS': 'invalid'}):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                self.read_settings(**options)
+
     def test_default_uses_pool_and_prepared_statements_without_persistent_connections(self):
         config = self.read_database()
         self.assertEqual(config["CONN_MAX_AGE"], 0)

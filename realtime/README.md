@@ -126,8 +126,9 @@ abandonadas caducan en 60 segundos si falla la limpieza por desconexión.
 Redis transporta avisos de refresco sin garantía de reproducción: al reconectar,
 consultar REST para recuperar el estado. Su caída no revierte las escrituras en
 PostgreSQL; nuevas conexiones SSE devuelven 503. El proxy debe admitir WebSockets
-y no almacenar/bufferizar SSE. No se incorpora interfaz de notificaciones Angular
-como parte de estos endpoints de backend.
+y no almacenar/bufferizar SSE. El frontend Angular conecta la campanita, el centro
+de alertas y el dashboard a estos avisos, con reconexión y recuperación por REST.
+[Integración y pruebas de navegador](../../frontend/docs/realtime-20261013/INFORME.md).
 
 ## Verificación
 
