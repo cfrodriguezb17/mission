@@ -1,5 +1,6 @@
 from rest_framework import filters, generics
 from rest_framework.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
 from audit.mixins import ConsultaAuditadaMixin
 
@@ -11,6 +12,8 @@ from .models import Pais
 from .serializers import PaisDetailSerializer, PaisValuesSerializer
 
 
+@extend_schema_view(get=extend_schema(parameters=[OpenApiParameter(
+    'region', str, enum=Pais.Region.values, description='Filtrar por región geográfica.')]))
 class PaisListView(ConsultaAuditadaMixin, SharedDataListMixin, generics.ListAPIView):
     audit_entidad = "Pais"
     serializer_class = PaisValuesSerializer

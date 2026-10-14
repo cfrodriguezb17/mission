@@ -4,6 +4,8 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.renderers import JSONRenderer
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 from audit.services import obtener_ip, registrar_actividad
 from portfolios.selectors import portafolios_visibles, resumen_portafolio
@@ -16,6 +18,9 @@ from .services import generar_pdf
 class ExportPDFView(APIView):
     renderer_classes = [JSONRenderer, PDFDownloadRenderer]
 
+    @extend_schema(summary='Descargar portafolio en PDF', responses={
+        (200, 'application/pdf'): OpenApiResponse(OpenApiTypes.BINARY, description='PDF con gráficos e instantánea del portafolio.')},
+        parameters=[OpenApiParameter('Content-Disposition', str, OpenApiParameter.HEADER, response=[200])])
     def get(self, request, pk):
         # Las escrituras de posiciones usan el mismo bloqueo; capturar una sola versión.
         with transaction.atomic():

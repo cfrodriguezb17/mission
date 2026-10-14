@@ -3,6 +3,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 
 from audit.mixins import ConsultaAuditadaMixin
 from audit.services import obtener_ip
@@ -12,10 +14,11 @@ from common.pagination import StandardPagination
 
 from .models import Alerta
 from .selectors import alertas_visibles
-from .serializers import AlertaFilterSerializer, AlertaSerializer
+from .serializers import AlertaFilterSerializer, AlertaSerializer, ResumenAlertasSerializer
 from .services import leer_alerta, leer_todas
 
 
+@extend_schema_view(get=extend_schema(parameters=[AlertaFilterSerializer]))
 class AlertaListView(ConsultaAuditadaMixin, generics.ListAPIView):
     audit_entidad = "Alerta"
     serializer_class = AlertaSerializer
@@ -31,6 +34,7 @@ class AlertaListView(ConsultaAuditadaMixin, generics.ListAPIView):
 
 
 class LeerView(APIView):
+    @extend_schema(request=None, responses=AlertaSerializer)
     def put(self, request, pk):
         alerta = get_object_or_404(alertas_visibles(request.user), pk=pk)
         leer_alerta(request.user, alerta.pk, ip=obtener_ip(request))
@@ -39,12 +43,14 @@ class LeerView(APIView):
 
 
 class LeerTodasView(APIView):
+    @extend_schema(request=None, responses=inline_serializer('AlertasMarcadas', {'marcadas': serializers.IntegerField()}))
     def put(self, request):
         return Response({"marcadas": leer_todas(request.user, ip=obtener_ip(request))})
 
 
 class ResumenView(ConsultaAuditadaMixin, APIView):
     audit_entidad = "Alerta"
+    @extend_schema(responses=ResumenAlertasSerializer)
     def get(self, request):
         queryset = alertas_visibles(request.user)
         totals = queryset.aggregate(total=Count("pk"), no_leidas=Count("pk", filter=Q(leida=False)))

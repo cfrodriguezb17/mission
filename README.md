@@ -16,6 +16,8 @@ Incluye exportación PDF y notificaciones en tiempo real mediante Redis/WebSocke
 | Frontend público | https://frontend-production-c7a6.up.railway.app |
 | API pública | https://mission-production-ab1c.up.railway.app/api/ |
 | Documentación API pública | https://mission-production-ab1c.up.railway.app/api/docs/ |
+| Swagger interactivo | https://mission-production-ab1c.up.railway.app/api/swagger/ |
+| Esquema OpenAPI JSON | https://mission-production-ab1c.up.railway.app/api/schema/ |
 
 Publicación DEMO verificada el 14 de octubre de 2026: acceso con los tres roles,
 35 comprobaciones HTTP, operaciones de portafolios, PDF y conexión WebSocket.
@@ -85,7 +87,8 @@ Los históricos son simulados y aparecen identificados como tales.
 
 - [Arquitectura y decisiones técnicas](ARQUITECTURA.md).
 - [Modelo relacional y restricciones](backend/MODELO_DATOS.md).
-- [Contrato de API](backend/API.md); `/api/docs/` expone el contrato como Markdown en JSON.
+- [Contrato de API](backend/API.md); `/api/docs/` conserva el contrato como Markdown en JSON.
+- Swagger en `/api/swagger/` y OpenAPI 3 en `/api/schema/`, generados con drf-spectacular.
 - [Fórmula IRPC](backend/risk/README.md).
 - [Ejecución de pruebas](docs/PRUEBAS.md).
 - [Publicación en GitHub y Railway](deployment/RAILWAY.md).
@@ -94,6 +97,16 @@ Importar [la colección Postman](docs/DataPulse.postman_collection.json).
 Configurar `base_url=http://127.0.0.1:8000`, `password_demo=DataPulse2026!`
 y una `password_registro` válida. Los logins guardan los tokens por rol. La
 colección realiza escrituras y sincronizaciones; ejecutarla sobre una base DEMO.
+
+## Integración y entrega continua
+
+[GitHub Actions](https://github.com/cfrodriguezb17/mission/actions/workflows/ci.yml)
+ejecuta el pipeline [CI](.github/workflows/ci.yml) en cada push a `main` y pull request:
+pruebas Django con PostgreSQL, validación OpenAPI, pruebas Angular, build de
+producción y pruebas de navegador con API y Redis aislados. No necesita secretos
+de producción. Railway recibe los cambios de GitHub; activar **Wait for CI** en
+los servicios `mission`, `frontend` y `cotizaciones` para condicionar su publicación
+al resultado del pipeline. [Detalles](docs/PRUEBAS.md#integracion-continua).
 
 ## Operación
 

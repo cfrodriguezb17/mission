@@ -2,6 +2,8 @@ from django.utils import timezone
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from common.schema import PAGINATION_PARAMETERS
 
 from audit.mixins import ConsultaAuditadaMixin
 from common.filters import StrictOrderingFilter
@@ -11,12 +13,13 @@ from countries.models import Pais
 from economics.models import IndicadorEconomico
 
 from .selectors import paises_con_riesgo, resumen_dashboard
-from .serializers import MapaSerializer, TendenciasFilterSerializer
+from .serializers import MapaSerializer, TendenciasFilterSerializer, ResumenDashboardSerializer, TendenciasResponse
 
 
 class ResumenView(ConsultaAuditadaMixin, APIView):
     audit_entidad = "Dashboard"
 
+    @extend_schema(responses=ResumenDashboardSerializer)
     def get(self, request):
         return data_response(resumen_dashboard(request.user))
 
@@ -41,6 +44,9 @@ class TendenciasView(ConsultaAuditadaMixin, generics.GenericAPIView):
     ordering_fields = ["codigo_iso", "nombre"]
     ordering = ["codigo_iso"]
 
+    @extend_schema(parameters=[TendenciasFilterSerializer, *PAGINATION_PARAMETERS,
+        OpenApiParameter('ordering', str, description='codigo_iso o nombre; prefijo - para descendente.')],
+        responses=TendenciasResponse)
     def get(self, request):
         if request.accepted_renderer.format != 'json':
             return self.get_uncached(request)

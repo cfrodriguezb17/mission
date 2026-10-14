@@ -22,6 +22,9 @@ Mantener una réplica del backend en esta primera publicación. Su arranque apli
 migraciones, genera estáticos y ejecuta Uvicorn. El seed es un paso separado.
 Los directorios raíz permiten que Railway detecte el Dockerfile de cada proyecto.
 Configurar watch paths `/backend/**` y `/frontend/**` respectivamente.
+Activar **Wait for CI** en `mission`, `frontend` y `cotizaciones`: el workflow
+[CI](../.github/workflows/ci.yml) debe pasar antes de cada publicación automática.
+No se necesita guardar un token de Railway en GitHub.
 
 Esta guía usa los ajustes del servicio. No añade `railway.json`: Railway indica
 que Config as Code está deprecado y que los servicios nuevos no pueden adoptarlo.
@@ -138,6 +141,7 @@ con los horarios `0 3 * * *`, `15 3 * * *` y `*/15 * * * *` respectivamente.
 ## 5. Comprobar y registrar la entrega
 
 - API y frontend accesibles por HTTPS, salud correcta y rutas internas recargables.
+- Swagger en `/api/swagger/`, esquema JSON en `/api/schema/` y recursos estáticos accesibles.
 - Login con ADMIN, ANALISTA y VIEWER; VIEWER recibe 403 al escribir.
 - Dashboard, gráficos, países, históricos y fuentes disponibles.
 - Crear/editar portafolio y posiciones; límites y conflicto 409; descargar PDF.

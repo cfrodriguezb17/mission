@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
     'corsheaders',
     'accounts.apps.AccountsConfig',
     'countries.apps.CountriesConfig',
@@ -73,6 +75,7 @@ if THROTTLE_NUM_PROXIES < 0:
     raise ValueError('DJANGO_NUM_PROXIES debe ser un entero mayor o igual a cero.')
 
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'common.schema.DataPulseAutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
@@ -84,6 +87,31 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {'user': '100/min', 'anon': '20/min'},
     'NUM_PROXIES': THROTTLE_NUM_PROXIES,
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'DataPulse Latam API',
+    'VERSION': '1.0.0',
+    'DESCRIPTION': (
+        'Indicadores económicos, riesgo país, alertas y portafolios simulados. '
+        'Obtén access en POST /api/auth/login/ y pégalo en Authorize. '
+        'Las escrituras requieren ADMIN o ANALISTA; sincronizar y recalcular requieren ADMIN. '
+        'Los endpoints de posiciones y edición requieren la versión vigente del portafolio. '
+        'Los datos DEMO se identifican como simulados. '
+        'WebSocket: /ws/notificaciones/, subprotocolos datapulse y bearer.<access>; '
+        'su contrato se describe en /api/docs/.'
+    ),
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SERVE_AUTHENTICATION': [],
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': r'/api',
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'SWAGGER_UI_SETTINGS': {'deepLinking': True, 'persistAuthorization': False, 'validatorUrl': None},
+    'POSTPROCESSING_HOOKS': [
+        'drf_spectacular.hooks.postprocess_schema_enums',
+        'common.schema.add_common_errors',
+    ],
 }
 
 CACHES = {'default': {

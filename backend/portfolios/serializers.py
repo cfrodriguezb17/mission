@@ -1,5 +1,6 @@
 from django.db.models import Prefetch, prefetch_related_objects
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from common.serializers import BooleanQueryField, StrictInputSerializer as EntradaEstricta
 from countries.models import Pais
@@ -87,6 +88,35 @@ class PosicionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class PosicionMutationSerializer(PosicionSerializer):
+    version_portafolio = serializers.IntegerField(read_only=True)
+
+    class Meta(PosicionSerializer.Meta):
+        fields = PosicionSerializer.Meta.fields + ['version_portafolio']
+        read_only_fields = fields
+
+
+class DistribucionSerializer(serializers.Serializer):
+    codigo = serializers.CharField()
+    monto_usd = serializers.CharField()
+    porcentaje = serializers.CharField()
+
+
+class ResumenPortafolioSerializer(serializers.Serializer):
+    portafolio = serializers.IntegerField()
+    version = serializers.IntegerField()
+    total_invertido_usd = serializers.CharField()
+    posiciones_activas = serializers.IntegerField()
+    riesgo_promedio_ponderado = serializers.CharField(allow_null=True)
+    monto_con_riesgo_usd = serializers.CharField()
+    monto_sin_riesgo_usd = serializers.CharField()
+    riesgo_incompleto = serializers.BooleanField()
+    paises_sin_riesgo = serializers.ListField(child=serializers.CharField())
+    distribucion_por_pais = DistribucionSerializer(many=True)
+    distribucion_por_tipo_activo = DistribucionSerializer(many=True)
+    distribucion_por_riesgo = DistribucionSerializer(many=True)
+
+
 class PortafolioSerializer(serializers.ModelSerializer):
     es_propio = serializers.SerializerMethodField()
     puede_editar = serializers.SerializerMethodField()
@@ -99,18 +129,18 @@ class PortafolioSerializer(serializers.ModelSerializer):
                   "es_publico", "version", "es_propio", "puede_editar", "puede_eliminar", "puede_cambiar_visibilidad"]
         read_only_fields = fields
 
-    def get_es_propio(self, obj):
+    def get_es_propio(self, obj) -> bool:
         return obj.usuario_id == self.context["request"].user.pk
 
-    def get_puede_editar(self, obj):
+    def get_puede_editar(self, obj) -> bool:
         user = self.context["request"].user
         return user.is_active and obj.activo and (user.rol == "ADMIN" or user.rol == "ANALISTA" and (obj.es_publico or obj.usuario_id == user.pk))
 
-    def get_puede_eliminar(self, obj):
+    def get_puede_eliminar(self, obj) -> bool:
         user = self.context["request"].user
         return self.get_puede_editar(obj) and (user.rol == "ADMIN" or obj.usuario_id == user.pk)
 
-    def get_puede_cambiar_visibilidad(self, obj):
+    def get_puede_cambiar_visibilidad(self, obj) -> bool:
         return self.get_puede_eliminar(obj)
 
 
@@ -128,6 +158,7 @@ class PortafolioDetailSerializer(PortafolioSerializer):
             "posiciones", queryset=Posicion.objects.select_related("pais")))
         return super().to_representation(instance)
 
+    @extend_schema_field(ResumenPortafolioSerializer)
     def get_resumen(self, obj):
         return resumen_portafolio(obj, posiciones=obj.posiciones.all())
 

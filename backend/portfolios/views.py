@@ -3,6 +3,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework import filters, generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 
 from audit.services import obtener_ip
 from audit.mixins import ConsultaAuditadaMixin
@@ -16,7 +18,7 @@ from .serializers import (
     CerrarPosicionSerializer, CrearPortafolioSerializer, CrearPosicionSerializer,
     EditarPortafolioSerializer, EditarPosicionSerializer, PortafolioDetailSerializer,
     PortafolioFilterSerializer, PortafolioSerializer, PosicionSerializer, VersionSerializer,
-    ValidarNombrePortafolioSerializer,
+    ValidarNombrePortafolioSerializer, ResumenPortafolioSerializer, PosicionMutationSerializer,
 )
 from .services import (
     agregar_posicion, cerrar_posicion, crear_portafolio, editar_portafolio,
@@ -36,6 +38,8 @@ def visible(request, pk, bloquear=False):
 
 
 class ValidarNombrePortafolioView(APIView):
+    @extend_schema(parameters=[ValidarNombrePortafolioSerializer], responses=inline_serializer(
+        'NombrePortafolioDisponible', {'nombre': serializers.CharField(), 'disponible': serializers.BooleanField()}))
     def get(self, request):
         # Conservar excluir vacío como entrada inválida, no como campo omitido de HTML.
         serializer = ValidarNombrePortafolioSerializer(data=request.query_params.dict())
@@ -46,6 +50,7 @@ class ValidarNombrePortafolioView(APIView):
                         headers={"Cache-Control": "private, no-store"})
 
 
+@extend_schema_view(get=extend_schema(parameters=[PortafolioFilterSerializer]))
 class PortafolioListView(ConsultaAuditadaMixin, generics.ListAPIView):
     audit_entidad = "Portafolio"
     serializer_class = PortafolioSerializer
@@ -66,6 +71,8 @@ class PortafolioListView(ConsultaAuditadaMixin, generics.ListAPIView):
         return queryset
 
     @transaction.atomic
+    @extend_schema(request=CrearPortafolioSerializer, responses={201: PortafolioSerializer},
+                   summary='Crear portafolio (ADMIN o ANALISTA)')
     def post(self, request):
         exigir_escritura(request.user)
         portfolio = crear_portafolio(request.user, entrada(CrearPortafolioSerializer, request), ip=obtener_ip(request))
@@ -76,17 +83,22 @@ class PortafolioDetailView(ConsultaAuditadaMixin, APIView):
     audit_entidad = "Portafolio"
     audit_id_kwarg = "pk"
     @transaction.atomic
+    @extend_schema(responses=PortafolioDetailSerializer)
     def get(self, request, pk):
         portfolio = visible(request, pk, bloquear=True)
         return Response(PortafolioDetailSerializer(portfolio, context={"request": request}).data)
 
     @transaction.atomic
+    @extend_schema(request=EditarPortafolioSerializer, responses=PortafolioDetailSerializer,
+                   description='Requiere permiso de edición y la versión vigente. Una versión anterior devuelve 409.')
     def put(self, request, pk):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(EditarPortafolioSerializer, request)
         portfolio = editar_portafolio(request.user, pk, data.pop("version"), data, ip=obtener_ip(request))
         return Response(PortafolioDetailSerializer(portfolio, context={"request": request}).data)
 
+    @extend_schema(request=VersionSerializer, responses={204: None},
+                   description='Baja lógica. Requiere propietario o ADMIN y la versión vigente en el cuerpo JSON.')
     def delete(self, request, pk):
         exigir_edicion(request.user, visible(request, pk), solo_propietario=True)
         data = entrada(VersionSerializer, request)
@@ -96,6 +108,7 @@ class PortafolioDetailView(ConsultaAuditadaMixin, APIView):
 
 class PosicionCreateView(APIView):
     @transaction.atomic
+    @extend_schema(request=CrearPosicionSerializer, responses={201: PosicionMutationSerializer})
     def post(self, request, pk):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(CrearPosicionSerializer, request)
@@ -106,6 +119,7 @@ class PosicionCreateView(APIView):
 
 class PosicionDetailView(APIView):
     @transaction.atomic
+    @extend_schema(request=EditarPosicionSerializer, responses=PosicionMutationSerializer)
     def put(self, request, pk, posicion_id):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(EditarPosicionSerializer, request)
@@ -113,6 +127,8 @@ class PosicionDetailView(APIView):
         return Response({**PosicionSerializer(position).data, "version_portafolio": portfolio.version})
 
     @transaction.atomic
+    @extend_schema(request=CerrarPosicionSerializer, responses={200: PosicionMutationSerializer},
+                   description='Cierra la posición conservando su historial. Enviar la versión del portafolio en el cuerpo JSON.')
     def delete(self, request, pk, posicion_id):
         exigir_edicion(request.user, visible(request, pk))
         data = entrada(CerrarPosicionSerializer, request)
@@ -125,5 +141,6 @@ class ResumenView(ConsultaAuditadaMixin, APIView):
     audit_entidad = "Portafolio"
     audit_id_kwarg = "pk"
     @transaction.atomic
+    @extend_schema(responses=ResumenPortafolioSerializer)
     def get(self, request, pk):
         return Response(resumen_portafolio(visible(request, pk, bloquear=True)))

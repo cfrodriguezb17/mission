@@ -5,6 +5,8 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from common.schema import OperationResultSerializer, PAGINATION_PARAMETERS
 
 from audit.services import obtener_ip
 from audit.mixins import ConsultaAuditadaMixin
@@ -17,13 +19,14 @@ from common.serializers import DateRangeFilterSerializer as FechaFilterSerialize
 from countries.models import Pais
 
 from .selectors import historico_pais, ultimos_indices
-from .serializers import CalcularSerializer, IndiceRiesgoSerializer, RankingSerializer
+from .serializers import CalcularSerializer, IndiceRiesgoSerializer, RankingSerializer, DetalleRiesgoSerializer
 from backend.workflows import recalcular_con_alertas as recalcular_riesgos
 
 
 class CalcularView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
+    @extend_schema(request=CalcularSerializer, responses=OperationResultSerializer, summary='Recalcular IRPC (ADMIN)')
     def post(self, request):
         serializer = CalcularSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -49,6 +52,7 @@ class RankingView(RiskListView):
         return ultimos_indices()
 
 
+@extend_schema_view(get=extend_schema(parameters=[FechaFilterSerializer]))
 class HistoricoView(RiskListView):
     ordering = ["-fecha_calculo", "-id"]
 
@@ -68,6 +72,9 @@ class HistoricoView(RiskListView):
         return queryset
 
 
+@extend_schema_view(get=extend_schema(responses=DetalleRiesgoSerializer, operation_id='riesgo_detalle',
+    parameters=[FechaFilterSerializer, *PAGINATION_PARAMETERS,
+        OpenApiParameter('ordering', str, description='Campos de IndiceRiesgo; prefijo - para descendente.')]))
 class DetalleView(HistoricoView):
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

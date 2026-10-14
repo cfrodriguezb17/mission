@@ -1,5 +1,28 @@
 # Pruebas
 
+## Integracion continua
+
+El workflow [CI](../.github/workflows/ci.yml) se ejecuta en GitHub Actions para
+push a `main`, pull requests y ejecución manual. Utiliza permisos de lectura,
+cancela ejecuciones anteriores de la misma rama y tiene tiempos máximos por job.
+Las acciones están fijadas a revisiones concretas. Las bases, cuentas DEMO y
+credenciales del pipeline son temporales; no accede a la base de Railway.
+
+| Job | Comprobaciones |
+| --- | --- |
+| Backend y OpenAPI | Django, ausencia de migraciones pendientes, migración desde cero, estáticos, esquema válido sin advertencias, suite completa y tareas programadas |
+| Frontend y build | Instalación con lockfile, pruebas unitarias/integración y compilación de producción con configuración de Railway |
+| Navegador con API real | PostgreSQL y Redis temporales, API con seed, Chromium, flujos reales y casos con API controlada |
+
+La prueba `realtime-live.spec.ts` requiere su runner específico y se omite en
+este job; los tests de backend incluyen conexiones reales y los escenarios
+de navegador de reconexión usan eventos controlados. Ante fallos del navegador,
+GitHub conserva el reporte, capturas/trazas y log de la API durante siete días.
+
+En Railway, **Wait for CI** debe estar activo en `mission`, `frontend` y
+`cotizaciones`. Un resultado fallido bloquea la publicación automática de ese
+commit. Los watch paths siguen limitando reconstrucciones a cada carpeta.
+
 ## Backend
 
 Desde backend, con el entorno virtual activado y PostgreSQL de pruebas. El rol
@@ -8,6 +31,7 @@ necesita CREATEDB y acceso a la base de mantenimiento postgres.
 ```bash
 python manage.py check
 python manage.py makemigrations --check --dry-run
+python manage.py spectacular --validate --fail-on-warn --file /tmp/openapi.yaml
 python manage.py test --noinput
 ```
 
@@ -26,6 +50,7 @@ La prueba de documentación pública puede ejecutarse sin base de datos:
 
 ```bash
 python manage.py test common.tests.test_documentation --noinput
+python manage.py test common.tests.test_openapi --noinput
 ```
 
 La auditoría HTTP de operaciones usa una base temporal exclusiva y guarda su

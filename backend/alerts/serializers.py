@@ -20,3 +20,13 @@ class AlertaFilterSerializer(serializers.Serializer):
                                         error_messages={"invalid_choice": "Tipo de alerta inválido."})
     severidad = serializers.ChoiceField(choices=Alerta.Severidad.choices, required=False,
                                       error_messages={"invalid_choice": "Severidad inválida."})
+
+
+class ConteoAlertasSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    no_leidas = serializers.IntegerField()
+
+
+class ResumenAlertasSerializer(ConteoAlertasSerializer):
+    por_tipo = serializers.DictField(child=ConteoAlertasSerializer())
+    por_severidad = serializers.DictField(child=ConteoAlertasSerializer())

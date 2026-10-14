@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_serializer
+from common.schema import paginated
 
 from common.serializers import StrictInputSerializer
 from .models import IndiceRiesgo
@@ -43,13 +45,19 @@ class RankingSerializer(IndiceRiesgoSerializer):
         fields = IndiceRiesgoSerializer.Meta.fields + ["variacion", "tendencia"]
         read_only_fields = fields
 
-    def get_variacion(self, obj):
+    def get_variacion(self, obj) -> str | None:
         if obj.indice_anterior is None:
             return None
         return str((obj.indice_compuesto - obj.indice_anterior).quantize(Decimal("0.01")))
 
-    def get_tendencia(self, obj):
+    def get_tendencia(self, obj) -> str:
         if obj.indice_anterior is None:
             return "SIN_HISTORICO"
         delta = obj.indice_compuesto - obj.indice_anterior
         return "MEJORA" if delta > 0 else "EMPEORA" if delta < 0 else "ESTABLE"
+
+
+@extend_schema_serializer(many=False)
+class DetalleRiesgoSerializer(serializers.Serializer):
+    ultimo = IndiceRiesgoSerializer(allow_null=True)
+    historico = paginated('HistoricoRiesgo', IndiceRiesgoSerializer)

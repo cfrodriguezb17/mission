@@ -1,5 +1,23 @@
 # Contrato de API - DataPulse Latam
 
+## Swagger y OpenAPI
+
+- `/api/swagger/`: interfaz interactiva, con recursos estáticos servidos por el backend.
+- `/api/schema/`: contrato OpenAPI 3 en JSON, generado a partir de vistas y serializers.
+- `/api/docs/`: este documento en JSON, conservado por compatibilidad.
+
+En Swagger, ejecutar `POST /api/auth/login/` con una cuenta DEMO, copiar `access`,
+abrir **Authorize** y pegar solo el token, sin el prefijo Bearer. La autorización
+no persiste al recargar. Los permisos y límites de la API también se aplican a
+Swagger. Las operaciones de escritura modifican datos reales de la instalación.
+Los DELETE de portafolios/posiciones requieren el cuerpo JSON con `version`.
+El esquema describe HTTP/SSE; el protocolo WebSocket se documenta al final de
+esta guía. CI valida OpenAPI y falla ante advertencias de generación.
+
+```bash
+python manage.py spectacular --validate --fail-on-warn --file /tmp/openapi.yaml
+```
+
 Base: `/api/`. JSON UTF-8. Excepto registro, login, refresh, índice y documentación,
 se exige `Authorization: Bearer <access>`. ADMIN, ANALISTA y VIEWER consultan;
 las escrituras y objetos se restringen como se indica abajo. `/health/` consulta

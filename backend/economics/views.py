@@ -7,6 +7,8 @@ from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from common.schema import OperationResultSerializer
 
 from audit.services import obtener_ip
 from audit.mixins import ConsultaAuditadaMixin
@@ -34,6 +36,7 @@ class EconomicListView(ConsultaAuditadaMixin, generics.ListAPIView):
         return get_object_or_404(Pais.objects.filter(activo=True), pk=self.kwargs["codigo_iso"].upper())
 
 
+@extend_schema_view(get=extend_schema(parameters=[IndicadorFilterSerializer]))
 class IndicadorListView(EconomicListView):
     serializer_class = IndicadorValuesSerializer
     ordering_fields = ["anio", "tipo", "valor", "fecha_actualizacion", "id"]
@@ -50,6 +53,7 @@ class IndicadorListView(EconomicListView):
             "id", "pais_id", "tipo_id", "valor", "tipo__unidad", "anio", "fuente", "es_simulado", "fecha_actualizacion")
 
 
+@extend_schema_view(get=extend_schema(parameters=[FechaFilterSerializer]))
 class TipoCambioListView(EconomicListView):
     audit_entidad = "TipoCambio"
     serializer_class = TipoCambioSerializer
@@ -96,6 +100,8 @@ class TipoCambioListView(EconomicListView):
 class SyncIndicadoresView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
+    @extend_schema(request=SyncSerializer, responses=OperationResultSerializer,
+                   summary='Sincronizar indicadores (ADMIN)', description='Puede completar parcialmente; revisar errores y pendientes.')
     def post(self, request):
         serializer = SyncSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

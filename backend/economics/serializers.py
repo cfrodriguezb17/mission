@@ -43,11 +43,11 @@ class TipoCambioSerializer(serializers.ModelSerializer):
                   "dato_anterior_faltante", "fuente", "es_simulado"]
         read_only_fields = fields
 
-    def get_variacion_porcentual(self, obj):
+    def get_variacion_porcentual(self, obj) -> str | None:
         value = variacion_porcentual(obj.tasa, obj.tasa_anterior)
         return str(value) if value is not None else None
 
-    def get_dato_anterior_faltante(self, obj):
+    def get_dato_anterior_faltante(self, obj) -> bool:
         return obj.tasa_anterior is None
 
 
