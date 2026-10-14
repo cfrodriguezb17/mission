@@ -1,0 +1,49 @@
+<section class="panel chart-panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Tendencias económicas</h2>
+      <p>
+        Compara los últimos cinco años completos ·
+        {{ trends()?.unidad === 'PORCENTAJE' ? 'Porcentaje (%)' : (trends()?.unidad ?? 'USD') }}
+      </p>
+    </div>
+    <form class="chart-controls" [formGroup]="filters()">
+      <mat-form-field class="compact-field" appearance="outline"
+        ><mat-label>Indicador</mat-label
+        ><mat-select formControlName="tipo">
+          @for (item of indicators; track item.code) {
+            <mat-option [value]="item.code">{{ item.label }}</mat-option>
+          }
+        </mat-select></mat-form-field
+      ><mat-form-field class="compact-field country-select" appearance="outline"
+        ><mat-label>Países (máximo 3)</mat-label
+        ><mat-select formControlName="paises" multiple>
+          @for (country of countries(); track country.codigo_iso) {
+            <mat-option
+              [value]="country.codigo_iso"
+              [disabled]="
+                filters().controls.paises.value.length >= 3 &&
+                !filters().controls.paises.value.includes(country.codigo_iso)
+              "
+              >{{ country.nombre }}</mat-option
+            >
+          }
+        </mat-select></mat-form-field
+      >
+    </form>
+  </div>
+  @if (filters().invalid) {
+    <div class="notice">Selecciona entre uno y tres países.</div>
+  } @else {
+    <app-page-state [loading]="trendLoading()" [error]="trendError()" (retry)="retry.emit()" />
+    @if (!trendLoading() && !trendError()) {
+      <app-chart title="Tendencias económicas" [labels]="trendLabels()" [series]="trendSeries()" />
+      @if (trendNotice()) {
+        <p class="small muted section-gap">
+          Hay datos parciales o simulados. Los años sin información aparecen como interrupciones en
+          el gráfico.
+        </p>
+      }
+    }
+  }
+</section>

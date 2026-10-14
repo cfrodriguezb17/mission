@@ -1,0 +1,182 @@
+<a class="back-link" routerLink="/portafolios"
+  ><mat-icon>arrow_back</mat-icon>Todos los portafolios</a
+><app-page-state [loading]="loading()" [error]="error()" (retry)="load()" />
+@if (!loading() && !error()) {
+  @if (portfolio(); as p) {
+    <div class="page-heading">
+      <div>
+        <span class="eyebrow"
+          >GESTIÓN DE INVERSIONES · {{ p.es_propio ? 'PROPIO' : 'COMPARTIDO' }}</span
+        >
+        <h1>{{ p.nombre }}</h1>
+        <p>{{ p.descripcion || 'Sin descripción' }} · {{ p.es_publico ? 'Público' : 'Privado' }}</p>
+      </div>
+      <div class="heading-actions">
+        <button mat-stroked-button (click)="download()" [disabled]="busy()">
+          <mat-icon>download</mat-icon>Exportar PDF
+        </button>
+        @if (p.puede_editar) {
+          <button mat-stroked-button (click)="edit()" [disabled]="busy()">
+            <mat-icon>edit</mat-icon>Editar
+          </button>
+        }
+        @if (p.puede_eliminar) {
+          <button
+            mat-icon-button
+            aria-label="Eliminar portafolio"
+            (click)="remove()"
+            [disabled]="busy()"
+          >
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        }
+      </div>
+    </div>
+    <div class="three-column">
+      <section class="panel">
+        <p class="metric-label">Capital activo invertido</p>
+        <div class="metric-value">
+          {{ p.resumen.total_invertido_usd | currency: 'USD' : 'symbol' : '1.2-2' }}
+        </div>
+        <p class="metric-unit">Dólares estadounidenses</p>
+      </section>
+      <section class="panel">
+        <p class="metric-label">IRPC promedio ponderado</p>
+        <div class="metric-value">
+          {{
+            p.resumen.riesgo_promedio_ponderado === null
+              ? '—'
+              : (p.resumen.riesgo_promedio_ponderado | number: '1.0-2')
+          }}
+          <small class="small muted">/ 100</small>
+        </div>
+        <p class="metric-unit">Mayor puntaje, menor riesgo</p>
+      </section>
+      <section class="panel">
+        <p class="metric-label">Posiciones activas</p>
+        <div class="metric-value">{{ p.resumen.posiciones_activas }}</div>
+        <p class="metric-unit">
+          {{ p.posiciones.length - p.resumen.posiciones_activas }} posiciones cerradas
+        </p>
+      </section>
+    </div>
+    @if (p.resumen.riesgo_incompleto) {
+      <div class="notice">
+        <mat-icon>warning_amber</mat-icon>Riesgo incompleto:
+        {{ p.resumen.monto_sin_riesgo_usd | currency: 'USD' }} de capital sin índice disponible. El
+        promedio incluye solo capital con riesgo conocido.
+      </div>
+    }
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Posiciones del portafolio</h2>
+          <p>Las posiciones cerradas se conservan como histórico.</p>
+        </div>
+        @if (p.puede_editar) {
+          <button mat-flat-button (click)="position()" [disabled]="busy()">
+            <mat-icon>add</mat-icon>Agregar posición
+          </button>
+        }
+      </div>
+      <div class="table-scroll">
+        <table>
+          <caption class="sr-only">
+            Posiciones del portafolio
+            {{
+              p.nombre
+            }}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">PAÍS</th>
+              <th scope="col">ACTIVO</th>
+              <th scope="col">INVERSIÓN USD</th>
+              <th scope="col">ENTRADA</th>
+              <th scope="col">ESTADO / SALIDA</th>
+              <th scope="col">ACCIONES</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (pos of p.posiciones; track pos.id) {
+              <tr>
+                <td>
+                  <a [routerLink]="['/paises', pos.pais]"
+                    >{{ flag(pos.pais) }} {{ pos.nombre_pais }}</a
+                  >
+                </td>
+                <td>{{ label(pos.tipo_activo) }}</td>
+                <td>
+                  <strong>{{
+                    pos.monto_inversion_usd | currency: 'USD' : 'symbol' : '1.2-2'
+                  }}</strong>
+                </td>
+                <td>{{ pos.fecha_entrada | date: 'd MMM yyyy' }}</td>
+                <td>
+                  @if (pos.fecha_salida) {
+                    <span class="status-closed"
+                      >Cerrada · {{ pos.fecha_salida | date: 'd MMM yyyy' }}</span
+                    >
+                  } @else {
+                    <span class="risk-badge" data-risk="BAJO">Activa</span>
+                  }
+                </td>
+                <td>
+                  @if (p.puede_editar) {
+                    <button
+                      mat-icon-button
+                      [attr.aria-label]="'Editar posición de ' + pos.nombre_pais"
+                      (click)="position(pos)"
+                      [disabled]="busy()"
+                    >
+                      <mat-icon>edit_outlined</mat-icon>
+                    </button>
+                    @if (!pos.fecha_salida) {
+                      <button
+                        mat-icon-button
+                        [attr.aria-label]="'Cerrar posición de ' + pos.nombre_pais"
+                        (click)="close(pos)"
+                        [disabled]="busy()"
+                      >
+                        <mat-icon>archive</mat-icon>
+                      </button>
+                    }
+                  } @else {
+                    <span class="small muted">Solo consulta</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (!p.posiciones.length) {
+        <app-page-state
+          [empty]="true"
+          emptyTitle="Tu portafolio aún no tiene posiciones"
+          emptyMessage="Agrega una inversión para ver la distribución y el riesgo ponderado."
+        />
+      }
+    </section>
+    @if (p.resumen.posiciones_activas) {
+      <div class="two-column section-gap">
+        <app-distribucion-chart
+          title="Distribución por país"
+          type="pie"
+          [labels]="countryLabels()"
+          [series]="countrySeries()"
+        />
+        <app-distribucion-chart
+          title="Distribución por activo"
+          chartTitle="Distribución por tipo de activo"
+          type="doughnut"
+          [labels]="assetLabels()"
+          [series]="assetSeries()"
+        />
+      </div>
+    }
+    <p class="small muted section-gap">
+      Última modificación: {{ p.fecha_modificacion | date: 'medium' }} · Versión {{ p.version }}
+    </p>
+  }
+}

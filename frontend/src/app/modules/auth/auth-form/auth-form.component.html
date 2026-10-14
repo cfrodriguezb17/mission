@@ -1,0 +1,91 @@
+<main class="auth-layout">
+  <section class="auth-story">
+    <a class="brand brand-light" routerLink="/login"
+      ><span class="brand-symbol"><mat-icon>stacked_line_chart</mat-icon></span
+      ><span>DataPulse<small>LATAM INTELLIGENCE</small></span></a
+    >
+    <div class="auth-story-content">
+      <div class="eyebrow">INTELIGENCIA PARA INVERTIR MEJOR</div>
+      <h1>El pulso de<br />Latinoamérica,<br /><span>en tus manos.</span></h1>
+      <p>
+        Conecta los datos económicos, entiende el riesgo y construye una perspectiva más clara de
+        tus inversiones.
+      </p>
+      <div class="auth-features">
+        <span><mat-icon>public</mat-icon>10 mercados</span
+        ><span><mat-icon>query_stats</mat-icon>6 indicadores</span
+        ><span><mat-icon>shield</mat-icon>Una visión integral</span>
+      </div>
+      <div class="auth-decoration" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span
+        ><span></span><span></span>
+      </div>
+    </div>
+    <p class="auth-copyright">DataPulse Latam · Plataforma de análisis financiero</p>
+  </section>
+  <section class="auth-form-side">
+    <div class="auth-card">
+      <span class="eyebrow">BIENVENIDO A DATAPULSE</span>
+      <h2>{{ register ? 'Crea tu cuenta' : 'Inicia sesión' }}</h2>
+      <p class="muted">
+        {{
+          register
+            ? 'Empieza a explorar los mercados de la región.'
+            : 'Ingresa a tu espacio de análisis e inversión.'
+        }}
+      </p>
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        @if (register) {
+          <mat-form-field appearance="outline"
+            ><mat-label>Nombre completo</mat-label
+            ><input matInput formControlName="nombre_completo" autocomplete="name" /><mat-error>{{
+              fieldError(form.controls.nombre_completo)
+            }}</mat-error></mat-form-field
+          >
+        }
+        <mat-form-field appearance="outline"
+          ><mat-label>Correo electrónico</mat-label
+          ><input
+            matInput
+            formControlName="email"
+            type="email"
+            autocomplete="email"
+            placeholder="nombre@empresa.com"
+          /><mat-error>{{ fieldError(form.controls.email) }}</mat-error></mat-form-field
+        ><mat-form-field appearance="outline"
+          ><mat-label>Contraseña</mat-label
+          ><input
+            matInput
+            formControlName="password"
+            [type]="hide() ? 'password' : 'text'"
+            [autocomplete]="register ? 'new-password' : 'current-password'"
+          /><button
+            mat-icon-button
+            matSuffix
+            type="button"
+            [attr.aria-label]="hide() ? 'Mostrar contraseña' : 'Ocultar contraseña'"
+            (click)="hide.set(!hide())"
+          >
+            <mat-icon>{{ hide() ? 'visibility_off' : 'visibility' }}</mat-icon></button
+          ><mat-error>{{ fieldError(form.controls.password) }}</mat-error></mat-form-field
+        >
+        @if (error()) {
+          <p class="form-error" role="alert">{{ error() }}</p>
+        }
+        <button mat-flat-button class="auth-submit" [disabled]="form.invalid || saving()">
+          {{ saving() ? 'Procesando…' : register ? 'Crear cuenta' : 'Iniciar sesión'
+          }}<mat-icon iconPositionEnd>arrow_forward</mat-icon>
+        </button>
+      </form>
+      <p class="auth-alternative">
+        {{ register ? '¿Ya tienes una cuenta?' : '¿Aún no tienes una cuenta?' }}
+        <a [routerLink]="register ? '/login' : '/registro'">{{
+          register ? 'Inicia sesión' : 'Regístrate'
+        }}</a>
+      </p>
+      @if (register) {
+        <p class="small muted">Las cuentas nuevas tienen acceso de consulta (VIEWER).</p>
+      }
+    </div>
+  </section>
+</main>
