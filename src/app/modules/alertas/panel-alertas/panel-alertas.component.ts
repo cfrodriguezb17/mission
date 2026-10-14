@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
-import { Subject, startWith, switchMap, catchError, EMPTY, finalize } from 'rxjs';
+import { Subject, startWith, switchMap, catchError, EMPTY, finalize, merge, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AlertaService } from '../../../core/services/alerta.service';
 import { NotifyService } from '../../../core/services/notify.service';
@@ -43,24 +43,30 @@ export class AlertsPage {
     severidad: [''],
   });
   readonly reload = new Subject<void>();
+  private readonly backgroundReload = new Subject<void>();
   page = 0;
   constructor() {
-    this.reload
+    merge(this.reload.pipe(map(() => false)), this.backgroundReload.pipe(map(() => true)))
       .pipe(
-        startWith(undefined),
-        switchMap(() => {
-          this.loading.set(true);
-          this.error.set(false);
+        startWith(false),
+        switchMap((background) => {
+          if (!background || !this.data()) {
+            this.loading.set(true);
+            this.error.set(false);
+          }
           return this.api
-            .list({
-              ...this.filters.getRawValue(),
-              ordering: '-fecha_creacion',
-              page: this.page + 1,
-              page_size: 20,
-            })
+            .list(
+              {
+                ...this.filters.getRawValue(),
+                ordering: '-fecha_creacion',
+                page: this.page + 1,
+                page_size: 20,
+              },
+              background,
+            )
             .pipe(
               catchError(() => {
-                this.error.set(true);
+                if (!background || !this.data()) this.error.set(true);
                 return EMPTY;
               }),
               finalize(() => this.loading.set(false)),
@@ -68,7 +74,11 @@ export class AlertsPage {
         }),
         takeUntilDestroyed(),
       )
-      .subscribe((v) => this.data.set(v));
+      .subscribe((v) => {
+        this.data.set(v);
+        this.error.set(false);
+      });
+    this.api.updates$.pipe(takeUntilDestroyed()).subscribe(() => this.backgroundReload.next());
     this.filters.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this.page = 0;
       this.reload.next();

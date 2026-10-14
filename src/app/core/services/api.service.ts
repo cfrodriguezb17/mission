@@ -14,9 +14,10 @@ export class ApiService {
       context: new HttpContext().set(SILENT, silent),
     });
   }
-  all<T>(path: string, params: Params = {}): Observable<T[]> {
+  all<T>(path: string, params: Params = {}, silent = false): Observable<T[]> {
     // Follow every page without trusting a server-supplied host for authenticated requests.
-    const page = (n: number) => this.get<Page<T>>(path, { ...params, page_size: 100, page: n });
+    const page = (n: number) =>
+      this.get<Page<T>>(path, { ...params, page_size: 100, page: n }, silent);
     return page(1).pipe(
       expand((result, index) => (result.next ? page(index + 2) : EMPTY)),
       reduce((all: T[], result) => [...all, ...result.results], []),

@@ -7,8 +7,8 @@ export class PaisService {
   list(params: Params = {}) {
     return this.api.get<Page<Country>>('/paises/', params);
   }
-  all() {
-    return this.api.all<Country>('/paises/');
+  all(silent = false) {
+    return this.api.all<Country>('/paises/', {}, silent);
   }
   detail(code: string) {
     return this.api.get<Country>(`/paises/${code}/`);

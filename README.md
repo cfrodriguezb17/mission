@@ -167,6 +167,30 @@ necesitar Google Fonts al compilar ni navegar.
 - El PDF se descarga como Blob con nombre de Content-Disposition, se libera el
   Object URL y se interpreta el JSON de error si el servidor responde con uno.
 
+## Alertas y dashboard en vivo
+
+La sesión abre un único WebSocket en `/ws/notificaciones/`. La campanita, el centro
+de alertas y el dashboard se refrescan al recibir avisos. Los filtros y datos
+visibles se conservan durante las consultas de fondo. Un aviso discreto anuncia
+las nuevas alertas; el detalle y las lecturas personales se obtienen por REST.
+
+El endpoint se deriva de `apiBaseUrl`: HTTP usa `ws`, HTTPS usa `wss`; producción
+con `/api` usa el mismo origen. El JWT se envía en el subprotocolo, nunca en la URL.
+La conexión se renueva antes de expirar el access, se recupera con espera creciente
+y se cierra al salir de la sesión. Cada reconexión consulta el estado actual para
+recuperar cambios ocurridos durante la interrupción.
+
+Los avisos se agrupan desde 250 ms, con una recarga como máximo cada cinco segundos
+durante ráfagas. Con WebSocket conectado se suspende el polling; si falla se
+consultan el contador y el listado de alertas cada 30 segundos. Sin red se
+conservan los datos y se reintenta al recuperar conexión.
+
+El backend requiere Uvicorn, Redis (`DJANGO_REALTIME_REDIS_URL`, o
+`DJANGO_REDIS_URL`) y el origen del frontend en `CORS_ALLOWED_ORIGINS`.
+El proxy de producción debe enviar `/ws/` a Uvicorn con `Upgrade` y `Connection`;
+[deployment/nginx.conf](deployment/nginx.conf) incluye esta ruta.
+[Evidencia y prueba real reproducible](docs/realtime-20261013/INFORME.md).
+
 ## Verificación
 
 ```bash
@@ -178,21 +202,26 @@ pnpm test:e2e
 
 `pnpm test:pyramid` ejecuta **unitarias → integración → e2e** y se detiene ante
 el primer fallo. `pnpm test --watch=false` sigue ejecutando todas las pruebas de
-Vitest juntas. Resultado verificado: **60 unitarias, 39 integradas y 17 de
-navegador**, todas pasan.
+Vitest juntas. La integración WebSocket se verifica con **120 pruebas unitarias
+e integradas**, pruebas de navegador con eventos controlados y una prueba aislada
+con Django, PostgreSQL y Redis reales. Los resultados de la entrega anterior
+fueron 60 unitarias, 39 integradas y 17 de navegador.
 
 Las unitarias e integradas no necesitan servidores. Playwright inicia Angular
 si hace falta; la suite completa requiere Django local con los datos de
 demostración. Instalar Chromium una vez con `pnpm exec playwright install chromium`.
 `e2e/frontend.spec.ts` usa el backend real para login, roles, gráficos, país,
 CRUD, PDF y conflicto 409. Crea un portafolio temporal y lo elimina lógicamente
-al terminar. Los otros tres archivos e2e controlan las respuestas HTTP para
+al terminar. Los archivos e2e de flujos, casos límite y previsualización controlan las respuestas HTTP para
 registro/perfil, filtros, alertas, errores y renovación tardía de sesión.
 
 La guía de [pruebas y evidencia Red → Green → Refactor](docs/testing/README.md)
 explica la cobertura por nivel, los defectos reproducidos antes de corregirlos,
 los logs de cada fase y cómo ejecutar cada suite. Incluye regresiones para
-fechas imposibles y respuestas tardías después de cerrar sesión. Axe comprueba
+fechas imposibles y respuestas tardías después de cerrar sesión. `e2e/realtime.spec.ts`
+añade eventos WebSocket, reconexión, recuperación y polling de respaldo.
+`e2e/realtime-live.spec.ts` solo se activa mediante `tools/verify-realtime.py`, que
+crea y elimina una base temporal; no utiliza la base de demostración. Axe comprueba
 WCAG A/AA en las pantallas principales; el navegador verifica escritorio y tablet.
 
 La configuración admite `E2E_BASE_URL` y `E2E_PASSWORD` opcionales. Los artefactos
@@ -214,5 +243,7 @@ Estos archivos solo contienen configuración pública; no incluir secretos.
 Configurar HTTPS, CORS con el origen público exacto y fallback SPA a `index.html`
 para rutas como `/paises/CO`. Un servidor Nginx de referencia está en
 [deployment/nginx.conf](deployment/nginx.conf). `/api/` debe resolverse hacia
-Django y nunca hacia el fallback HTML. La aplicación está implementada y probada
+Django y nunca hacia el fallback HTML. Lo mismo aplica a `/ws/`, incluyendo la
+actualización de protocolo y un timeout superior al intervalo de ping.
+La aplicación está implementada y probada
 localmente; la publicación y la URL pública quedan a cargo del despliegue.

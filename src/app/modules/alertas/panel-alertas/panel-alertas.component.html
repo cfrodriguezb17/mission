@@ -8,6 +8,15 @@
     <mat-icon>done_all</mat-icon>Marcar todas como leídas
   </button>
 </div>
+<p role="status" class="muted">
+  @if (api.realtime.status() === 'connected') {
+    Las alertas se actualizan en vivo.
+  } @else if (api.realtime.status() === 'offline') {
+    Sin conexión. Se muestran las últimas alertas disponibles.
+  } @else {
+    Las alertas se consultan periódicamente mientras se restablece la conexión.
+  }
+</p>
 @if (api.summary$ | async; as summary) {
   <div class="notice info">
     <mat-icon>notifications_none</mat-icon>{{ summary.no_leidas }} alertas sin leer de

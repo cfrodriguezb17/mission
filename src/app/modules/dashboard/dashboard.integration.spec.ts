@@ -7,6 +7,9 @@ import { AuthService } from '../../core/auth/services/auth.service';
 import { NotifyService } from '../../core/services/notify.service';
 import { Role, User } from '../../core/models/api.models';
 import { country } from '../../testing/fixtures';
+import { Subject } from 'rxjs';
+import { RealtimeService, RealtimeUpdate } from '../../core/services/realtime.service';
+import { SILENT } from '../../core/services/api.service';
 
 const envelope = (results: unknown[]) => ({
   count: results.length,
@@ -17,8 +20,10 @@ const envelope = (results: unknown[]) => ({
 describe('Dashboard: datos, filtros, cancelación y administración', () => {
   let http: HttpTestingController;
   let component: Dashboard;
+  let updates: Subject<RealtimeUpdate>;
   const user = signal<User | null>(null);
   beforeEach(() => {
+    updates = new Subject();
     user.set({
       id: 1,
       email: 'admin@example.com',
@@ -32,6 +37,7 @@ describe('Dashboard: datos, filtros, cancelación y administración', () => {
         provideHttpClientTesting(),
         { provide: AuthService, useValue: { user } },
         { provide: NotifyService, useValue: { show: vi.fn() } },
+        { provide: RealtimeService, useValue: { updates$: updates } },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -138,4 +144,39 @@ describe('Dashboard: datos, filtros, cancelación y administración', () => {
       http.expectNone((r) => r.method === 'POST');
     },
   );
+  it('actualiza datos en segundo plano sin ocultar el dashboard ni cambiar sus filtros', () => {
+    flushOverview();
+    emptyTrends();
+    component.filters.setValue({ tipo: 'INFLACION', paises: ['CO'] });
+    emptyTrends();
+    updates.next({ alerts: false, dashboard: true, newAlerts: false });
+    expect(component.loading()).toBe(false);
+    const summary = http.expectOne((r) => r.url.endsWith('/dashboard/resumen/'));
+    expect(summary.request.context.get(SILENT)).toBe(true);
+    summary.flush({ total_paises: 2, alertas_activas: 4, promedio_irpc: '24.00' });
+    http.expectOne((r) => r.url.endsWith('/paises/')).flush(envelope([country()]));
+    http.expectOne((r) => r.url.endsWith('/riesgo/')).flush(envelope([]));
+    http.expectOne((r) => r.url.endsWith('/dashboard/mapa/')).flush(envelope([]));
+    const trend = trends();
+    expect(trend.request.context.get(SILENT)).toBe(true);
+    expect(trend.request.params.get('tipo')).toBe('INFLACION');
+    expect(trend.request.params.get('paises')).toBe('CO');
+    trend.flush({ ...envelope([]), tipo: 'INFLACION' });
+    expect(component.summary()?.alertas_activas).toBe(4);
+    expect(component.filters.getRawValue()).toEqual({ tipo: 'INFLACION', paises: ['CO'] });
+  });
+  it('un fallo de actualización automática conserva la información visible', () => {
+    flushOverview();
+    emptyTrends();
+    const previous = component.summary();
+    updates.next({ alerts: false, dashboard: true, newAlerts: false });
+    const requests = http.match((r) => !r.url.endsWith('/dashboard/tendencias/'));
+    requests
+      .find((r) => r.request.url.endsWith('/dashboard/resumen/'))!
+      .flush({}, { status: 503, statusText: 'Unavailable' });
+    emptyTrends();
+    expect(component.summary()).toBe(previous);
+    expect(component.error()).toBe(false);
+    expect(component.loading()).toBe(false);
+  });
 });

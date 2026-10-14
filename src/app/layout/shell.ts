@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { AuthService } from '../core/auth/services/auth.service';
 import { AlertaService } from '../core/services/alerta.service';
+import { RealtimeService } from '../core/services/realtime.service';
 import { LoadingService } from '../core/services/loading.service';
 import { AlertaBadgeComponent } from '../modules/alertas/alerta-badge/alerta-badge.component';
 import { LoadingSpinnerComponent } from '../shared/loading-spinner/loading-spinner.component';
@@ -31,6 +32,7 @@ import { LoadingSpinnerComponent } from '../shared/loading-spinner/loading-spinn
 export class Shell {
   readonly auth = inject(AuthService);
   readonly alerts = inject(AlertaService);
+  readonly realtime = inject(RealtimeService);
   readonly loading = inject(LoadingService);
   readonly menuOpen = signal(false);
   readonly page = signal('Vista general');
@@ -63,7 +65,11 @@ export class Shell {
       )
       .subscribe(update);
     this.alerts.start();
-    inject(DestroyRef).onDestroy(() => this.alerts.stop());
+    this.realtime.start();
+    inject(DestroyRef).onDestroy(() => {
+      this.realtime.stop();
+      this.alerts.stop();
+    });
   }
   initials() {
     return (

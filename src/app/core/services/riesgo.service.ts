@@ -4,8 +4,8 @@ import { Page, Risk, Params } from '../models/api.models';
 @Service()
 export class RiesgoService {
   private readonly api = inject(ApiService);
-  ranking() {
-    return this.api.all<Risk>('/riesgo/', { ordering: '-indice_compuesto' });
+  ranking(silent = false) {
+    return this.api.all<Risk>('/riesgo/', { ordering: '-indice_compuesto' }, silent);
   }
   detail(code: string) {
     return this.api.get<{ ultimo: Risk | null; historico: Page<Risk> }>(`/riesgo/${code}/`);

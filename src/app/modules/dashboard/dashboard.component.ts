@@ -15,6 +15,7 @@ import { ChartSeries } from '../../shared/charts/chart.component';
 import { PageState } from '../../shared/page-state/page-state.component';
 import { RiskMap } from './mapa-riesgo/mapa-riesgo.component';
 import { hasOperationIssues } from '../../shared/utils/operation-result';
+import { RealtimeService } from '../../core/services/realtime.service';
 import { RoleDirective } from '../../shared/directives/role.directive';
 import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
 import { TablaRankingComponent } from './tabla-ranking/tabla-ranking.component';
@@ -40,6 +41,7 @@ export class Dashboard {
   readonly auth = inject(AuthService);
   private readonly notify = inject(NotifyService);
   private readonly destroy = inject(DestroyRef);
+  private readonly realtime = inject(RealtimeService);
   readonly loading = signal(true);
   readonly error = signal(false);
   readonly summary = signal<DashboardSummary | null>(null);
@@ -59,7 +61,8 @@ export class Dashboard {
       [Validators.required, Validators.maxLength(3)],
     ],
   });
-  private readonly trendReload = new Subject<void>();
+  private readonly trendReload = new Subject<boolean>();
+  private readonly overviewReload = new Subject<boolean>();
   readonly trendLabels = computed(
     () => this.trends()?.results[0]?.valores.map((v) => String(v.anio)) ?? [],
   );
@@ -77,25 +80,62 @@ export class Dashboard {
       ) ?? false,
   );
   constructor() {
-    this.load();
+    this.overviewReload
+      .pipe(
+        startWith(false),
+        switchMap((background) => {
+          if (!background || !this.summary()) {
+            this.loading.set(true);
+            this.error.set(false);
+          }
+          return forkJoin({
+            summary: this.api.get<DashboardSummary>('/dashboard/resumen/', {}, background),
+            countries: this.countryApi.all(background),
+            ranking: this.riskApi.ranking(background),
+            map: this.api.all<MapCountry>('/dashboard/mapa/', {}, background),
+          }).pipe(
+            catchError(() => {
+              if (!background || !this.summary()) this.error.set(true);
+              return EMPTY;
+            }),
+            finalize(() => this.loading.set(false)),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((data) => {
+        this.error.set(false);
+        this.summary.set(data.summary);
+        this.countries.set(data.countries);
+        this.ranking.set(data.ranking);
+        this.map.set(data.map);
+      });
     this.trendReload
       .pipe(
-        startWith(undefined),
-        switchMap(() => {
+        startWith(false),
+        switchMap((background) => {
           if (this.filters.invalid) return EMPTY;
-          this.trendLoading.set(true);
-          this.trendError.set(false);
+          if (!background || !this.trends()) {
+            this.trendLoading.set(true);
+            this.trendError.set(false);
+          }
           const value = this.filters.getRawValue();
           return this.api
-            .get<Trends>('/dashboard/tendencias/', {
-              tipo: value.tipo,
-              paises: value.paises.join(','),
-              page_size: 100,
-            })
+            .get<Trends>(
+              '/dashboard/tendencias/',
+              {
+                tipo: value.tipo,
+                paises: value.paises.join(','),
+                page_size: 100,
+              },
+              background,
+            )
             .pipe(
               catchError(() => {
-                this.trendError.set(true);
-                this.trends.set(null);
+                if (!background || !this.trends()) {
+                  this.trendError.set(true);
+                  this.trends.set(null);
+                }
                 return EMPTY;
               }),
               finalize(() => this.trendLoading.set(false)),
@@ -103,34 +143,25 @@ export class Dashboard {
         }),
         takeUntilDestroyed(),
       )
-      .subscribe((t) => this.trends.set(t));
-    this.filters.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.trendReload.next());
-  }
-  load() {
-    this.loading.set(true);
-    this.error.set(false);
-    forkJoin({
-      summary: this.api.get<DashboardSummary>('/dashboard/resumen/'),
-      countries: this.countryApi.all(),
-      ranking: this.riskApi.ranking(),
-      map: this.api.all<MapCountry>('/dashboard/mapa/'),
-    })
-      .pipe(
-        takeUntilDestroyed(this.destroy),
-        finalize(() => this.loading.set(false)),
-      )
-      .subscribe({
-        next: (data) => {
-          this.summary.set(data.summary);
-          this.countries.set(data.countries);
-          this.ranking.set(data.ranking);
-          this.map.set(data.map);
-        },
-        error: () => this.error.set(true),
+      .subscribe((t) => {
+        this.trends.set(t);
+        this.trendError.set(false);
       });
+    this.filters.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.trendReload.next(false));
+    this.realtime.updates$.pipe(takeUntilDestroyed()).subscribe((update) => {
+      if (update.dashboard) {
+        this.load(true);
+        this.reloadTrends(true);
+      }
+    });
   }
-  reloadTrends() {
-    this.trendReload.next();
+  load(background = false) {
+    this.overviewReload.next(background);
+  }
+  reloadTrends(background = false) {
+    this.trendReload.next(background);
   }
   runJob(kind: 'sync' | 'risk') {
     if (this.busy() || this.auth.user()?.rol !== 'ADMIN') return;

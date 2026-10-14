@@ -48,7 +48,7 @@ async function setup(page: Page, failFirst = false) {
   return { riskRequests: () => riskRequests, writes: () => writes };
 }
 async function fillDraft(page: Page, name = 'Brasil') {
-  await page.getByLabel('País', { exact: true }).fill(name);
+  await page.getByRole('combobox', { name: 'País', exact: true }).fill(name);
   await page.getByRole('option', { name: new RegExp(`^${name} ·`) }).click();
   await page.getByLabel('Monto en USD').fill('3,000.00');
 }

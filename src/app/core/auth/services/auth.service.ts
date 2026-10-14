@@ -24,6 +24,8 @@ export class AuthService {
   readonly user = signal<User | null>(null);
   readonly canWrite = computed(() => !!this.user() && this.user()?.rol !== 'VIEWER');
   private readonly sessionEnded = new Subject<void>();
+  private readonly accessChanged = new Subject<string | null>();
+  readonly accessChanges$ = this.accessChanged.asObservable();
   private refreshRequest?: Observable<string>;
   get access(): string | null {
     return localStorage.getItem('datapulse.access');
@@ -37,6 +39,7 @@ export class AuthService {
       tap((tokens) => {
         localStorage.setItem('datapulse.access', tokens.access);
         localStorage.setItem('datapulse.refresh', tokens.refresh);
+        this.accessChanged.next(tokens.access);
       }),
       switchMap(() => this.loadProfile()),
       catchError((error) => {
@@ -72,7 +75,10 @@ export class AuthService {
         .post<{ access: string }>(this.api.base + '/auth/refresh/', { refresh: this.refreshToken })
         .pipe(
           takeUntil(this.sessionEnded),
-          tap((t) => localStorage.setItem('datapulse.access', t.access)),
+          tap((t) => {
+            localStorage.setItem('datapulse.access', t.access);
+            this.accessChanged.next(t.access);
+          }),
           map((t) => t.access),
           finalize(() => {
             this.refreshRequest = undefined;
@@ -97,6 +103,7 @@ export class AuthService {
     localStorage.removeItem('datapulse.access');
     localStorage.removeItem('datapulse.refresh');
     this.user.set(null);
+    this.accessChanged.next(null);
   }
   logout(): void {
     this.clear();
