@@ -1,0 +1,13 @@
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+djangorestframework-simplejwt>=5.5,<5.6
+psycopg[binary,pool]>=3.2,<4
+python-dotenv>=1.0,<2
+reportlab>=4.4,<5
+django-cors-headers>=4.7,<5
+gunicorn>=23,<24
+uvicorn[standard]>=0.35,<1
+channels>=4.3,<5
+channels-redis>=4.3,<5
+whitenoise>=6.9,<7
+redis>=5,<7
