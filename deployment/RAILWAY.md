@@ -24,19 +24,18 @@ Esta guía usa los ajustes del servicio. No añade `railway.json`: Railway indic
 que Config as Code está deprecado y que los servicios nuevos no pueden adoptarlo.
 Si se automatiza la creación de infraestructura después, utilizar su IaC actual.
 
-## 1. Publicar el repositorio
+## 1. Repositorio de entrega
 
-Crear un repositorio público vacío en la cuenta elegida, sin README, licencia ni
-gitignore generados. Desde la raíz de esta copia de entrega:
+Código público: [cfrodriguezb17/mission](https://github.com/cfrodriguezb17/mission).
+Clonar para preparar una instalación o conectar este repositorio a Railway:
 
 ```bash
-git remote add origin git@github.com:USUARIO/REPOSITORIO.git
-git push --set-upstream origin main
+git clone https://github.com/cfrodriguezb17/mission.git
+cd mission
 ```
 
-Reemplazar usuario y nombre por los valores reales. No reescribir historiales ni
-usar force push. Backend y frontend son carpetas versionadas, no submódulos.
-Verificar que un clon público incluye ambas carpetas y la documentación raíz.
+Backend y frontend son carpetas versionadas, no submódulos. La rama de entrega
+es main y contiene el historial incremental depurado de ambos proyectos.
 
 ## 2. PostgreSQL, Redis y API
 

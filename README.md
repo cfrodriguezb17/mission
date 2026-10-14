@@ -9,6 +9,7 @@ Incluye exportación PDF y notificaciones en tiempo real mediante Redis/WebSocke
 
 | Recurso | Dirección |
 | --- | --- |
+| Código fuente | https://github.com/cfrodriguezb17/mission |
 | Frontend local | http://localhost:4200 |
 | API local | http://127.0.0.1:8000/api/ |
 | Documentación API local | http://127.0.0.1:8000/api/docs/ |
