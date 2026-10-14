@@ -1,6 +1,8 @@
 # Publicación en GitHub y Railway
 
-Estado: preparación local; aún no hay despliegues públicos verificados.
+Estado: publicación DEMO activa, verificada el 14 de octubre de 2026.
+Frontend: https://frontend-production-c7a6.up.railway.app.
+API: https://mission-production-ab1c.up.railway.app/api/.
 La copia de entrega contiene el historial de ambos proyectos bajo `/backend` y
 `/frontend`. Las instalaciones locales originales se conservan por separado.
 
@@ -14,6 +16,7 @@ Crear un proyecto Railway con estos servicios en el mismo entorno y región:
 | Redis | Base Redis de Railway | Gestionado por Railway | Gestionado por Railway |
 | backend | Repositorio GitHub, `/backend` | CMD del Dockerfile: `sh deployment/start.sh` | `/health/` |
 | frontend | Mismo repositorio, `/frontend` | CMD de Nginx de la imagen | `/health/` |
+| cotizaciones | Mismo repositorio, `/backend` | `python deployment/scheduled.py` | Cron cada 15 minutos |
 
 Mantener una réplica del backend en esta primera publicación. Su arranque aplica
 migraciones, genera estáticos y ejecuta Uvicorn. El seed es un paso separado.
@@ -68,6 +71,12 @@ python manage.py seed_data
 python manage.py migrate --check
 ```
 
+Como alternativa, configurar temporalmente Pre-deploy Command con
+`sh deployment/prepare-demo.sh` y publicar una nueva versión. Este script aplica
+migraciones, carga el DEMO y comprueba las migraciones. Tras verificar la carga,
+vaciar Pre-deploy Command. Así se preparó la instalación pública conservando
+la cuenta que ya se había registrado.
+
 La precarga contiene los tres usuarios DEMO, diez países, cinco años de seis
 indicadores, 31 cotizaciones por moneda no USD, dos portafolios e índices.
 Los históricos de demostración están identificados como simulados.
@@ -92,8 +101,6 @@ La construcción local admite HTTP únicamente para localhost.
 La imagen final sirve los archivos con Nginx, escucha en PORT y admite rutas SPA
 como `/paises/CO`. Angular llama directamente al backend por HTTPS y abre su
 WebSocket por WSS; este servicio estático no hace de proxy de la API.
-La plantilla Nginx anterior con upstream `backend:8000` corresponde a otra
-topología y no se usa en este Dockerfile de Railway.
 
 Generar el dominio público del frontend. Configurar su healthcheck `/health/` y
 completar `CORS_ALLOWED_ORIGINS` en backend con ese origen, sin barra final.
@@ -102,14 +109,20 @@ Reiniciar/republicar backend para aplicar el cambio.
 
 ## 4. Tareas
 
-Los comandos de sincronización ya coordinan recálculo y alertas. Para programarlos,
-crear servicios cron desde `/backend`, compartiendo sus variables de conexión:
+El plan gratuito permite cinco servicios en este proyecto. La instalación pública
+agrupa las tareas en el servicio `cotizaciones`, desde `/backend`, con Start
+Command `python deployment/scheduled.py`, cron `*/15 * * * *`, sin healthcheck y
+política de reinicio NEVER. Comparte las variables mediante referencias a `mission`.
+El proceso utiliza UTC para elegir la tarea diaria y recupera alertas en cada
+ejecución, incluso si la sincronización falla. Un resultado parcial termina con
+estado de error para que Railway lo muestre. Los comandos coordinan recálculo y
+alertas. La programación es:
 
-| Servicio | Start Command | Cron UTC | Hora Bogotá |
+| Tarea | Comando | Horario UTC | Hora Bogotá |
 | --- | --- | --- | --- |
-| cotizaciones | `python manage.py update_tipos_cambio` | `0 3 * * *` | 22:00 del día anterior |
-| indicadores | `python manage.py sync_indicadores` | `15 3 * * *` | 22:15 del día anterior |
-| recuperar-alertas | `python manage.py generar_alertas --limite 1000` | `*/15 * * * *` | Cada 15 minutos |
+| cotizaciones | `python manage.py update_tipos_cambio` | 03:00–03:14 | 22:00 del día anterior |
+| indicadores | `python manage.py sync_indicadores` | 03:15–03:29 | 22:15 del día anterior |
+| recuperar-alertas | `python manage.py generar_alertas --limite 1000` | Cada 15 minutos | Cada 15 minutos |
 
 Para estos servicios, quitar healthchecks y usar política de reinicio NEVER.
 No iniciar Uvicorn ni ejecutar seed. Las tareas deben terminar tras procesar su
@@ -117,8 +130,10 @@ lote; Railway omite una ejecución si la anterior sigue activa. Un fallo parcial
 se revisa en logs y en los campos de pendientes. No configurar envíos de avisos
 externos sin definir el destinatario.
 
-Crear estos recursos solo en el proyecto seleccionado y dentro de su plan
-disponible. Esta preparación no activa servicios, cobros ni tareas remotas.
+Si Railway omite una ejecución o la retrasa fuera de su ventana diaria, esa
+sincronización espera al día siguiente; ADMIN también puede iniciarla desde la
+aplicación. Si el plan permite más servicios, se pueden separar las tres tareas
+con los horarios `0 3 * * *`, `15 3 * * *` y `*/15 * * * *` respectivamente.
 
 ## 5. Comprobar y registrar la entrega
 
@@ -134,6 +149,14 @@ disponible. Esta preparación no activa servicios, cobros ni tareas remotas.
 
 El healthcheck de Railway valida el arranque y no sustituye monitoreo continuo.
 Los respaldos y una restauración de prueba quedan como recomendación operativa.
+
+La publicación pasó 35 comprobaciones HTTP: los tres roles, diez países, índices,
+dashboard, históricos, portafolios, PDF, escritura denegada a VIEWER y conflicto
+de versión 409. También se verificaron conexión y ping/pong WebSocket. El
+portafolio temporal de verificación se retiró mediante baja lógica.
+El despachador cron tiene tres pruebas locales de horarios y manejo de errores.
+La ejecución de proveedores externos puede devolver resultados parciales;
+consultar los logs de la tarea antes de afirmar que todos sus datos están actualizados.
 
 ## Referencias oficiales
 

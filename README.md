@@ -13,7 +13,13 @@ Incluye exportación PDF y notificaciones en tiempo real mediante Redis/WebSocke
 | Frontend local | http://localhost:4200 |
 | API local | http://127.0.0.1:8000/api/ |
 | Documentación API local | http://127.0.0.1:8000/api/docs/ |
-| URLs públicas | Pendientes de publicación en Railway |
+| Frontend público | https://frontend-production-c7a6.up.railway.app |
+| API pública | https://mission-production-ab1c.up.railway.app/api/ |
+| Documentación API pública | https://mission-production-ab1c.up.railway.app/api/docs/ |
+
+Publicación DEMO verificada el 14 de octubre de 2026: acceso con los tres roles,
+35 comprobaciones HTTP, operaciones de portafolios, PDF y conexión WebSocket.
+La rama `main` despliega automáticamente los cambios de cada servicio.
 
 ## Estructura
 
