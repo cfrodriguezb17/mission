@@ -230,6 +230,17 @@ de cada ejecución se guardan en `test-results/` y `playwright-report/`
 
 ## Producción
 
+Para Railway se entrega un [Dockerfile](Dockerfile) de construcción por etapas y
+una [plantilla Nginx estática](deployment/railway.conf.template). Configurar
+`API_BASE_URL=https://DOMINIO_BACKEND/api` antes de construir: el contenedor
+configura Angular sin editar manualmente los entornos. La API y WebSockets se
+consultan directamente por HTTPS/WSS; configurar CORS en backend.
+[Guía completa](../deployment/RAILWAY.md). `pnpm-workspace.yaml` declara los
+scripts de dependencias permitidos para instalaciones limpias con pnpm 11.
+
+El siguiente arranque sin Docker conserva la configuración de entorno del
+repositorio:
+
 ```bash
 pnpm build
 ```

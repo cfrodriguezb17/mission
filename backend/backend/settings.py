@@ -292,6 +292,8 @@ CORS_URLS_REGEX = r'^/api/.*$'
 CORS_EXPOSE_HEADERS = ['Content-Disposition', 'Retry-After']
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
 SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', str(not DEBUG)).lower() == 'true'
+# Railway probes readiness over HTTP inside its network before enabling HTTPS traffic.
+SECURE_REDIRECT_EXEMPT = [r'^health/$']
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))

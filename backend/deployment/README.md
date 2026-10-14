@@ -1,8 +1,12 @@
 # Despliegue del backend
 
+Proveedor elegido para esta entrega: Railway. La [guía conjunta](../../deployment/RAILWAY.md)
+concreta servicios, directorios, variables y tareas. Esta guía conserva también
+alternativas de operación para otros servidores.
+
 El repositorio contiene un arranque portable para un servicio Python o una imagen
-Docker. La publicación requiere elegir proveedor, conectar repositorio y disponer
-de PostgreSQL. No hay una URL pública configurada ni credenciales de nube en este
+Docker. La publicación elegida en Railway requiere conectar el repositorio y
+preparar PostgreSQL. No hay una URL pública configurada ni credenciales de nube en este
 proyecto. El repositorio backend tampoco tiene remoto Git configurado actualmente.
 
 ## Servicio Python

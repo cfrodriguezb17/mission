@@ -6,6 +6,11 @@ consultan durante sincronizaciones y las lecturas usan datos persistidos.
 
 ## Estado actual
 
+La copia conjunta de entrega y la preparación de Railway se describen en
+[Estado de entrega](../docs/ENTREGA.md) y [GitHub/Railway](../deployment/RAILWAY.md).
+La verificación funcional previa a integrar esta copia registró 381 pruebas
+aprobadas; los resultados de etapas anteriores se conservan como historial.
+
 Implementados: accounts, countries, economics, risk, alerts, portfolios, audit,
 dashboard, reporting y realtime. No se agregaron tablas ni migraciones para dashboard/PDF:
 consumen el modelo existente. Errores uniformes en español, throttling, logs JSON
@@ -16,8 +21,8 @@ de tareas programadas. Publicación/URL pública pendiente de proveedor y cuenta
 REST Countries tiene una [prueba real satisfactoria de los diez países](../docs/backend-audit-20261010/REST_COUNTRIES.md)
 con proveedor autenticado, persistencia en PostgreSQL temporal y lecturas HTTP
 con JWT; la base principal se conservó. Una nueva instalación necesita su propia
-`REST_COUNTRIES_API_KEY` para sincronizar. El frontend conserva su base Angular;
-la implementación e integración de sus formularios y su publicación siguen pendientes.
+`REST_COUNTRIES_API_KEY` para sincronizar. El frontend Angular/Material y sus formularios ya están implementados e
+integrados; la publicación sigue pendiente.
 Guía conjunta de entrega y Postman en el [README raíz](../README.md).
 
 ## Instalación local reproducible
@@ -220,7 +225,7 @@ permisos, faltantes, umbrales, concurrencia, PDF y validaciones.
 la elimina al pasar y la conserva ante fallos para diagnóstico. `--fresh` genera
 accounts en un paquete temporal, sin modificar migraciones del repositorio.
 
-Última suite global comprobada: **374 pruebas correctas en PostgreSQL, 13 de
+Suite global de la etapa ASGI: **374 pruebas correctas en PostgreSQL, 13 de
 octubre de 2026**, con migraciones originales desde cero y base temporal eliminada.
 Las optimizaciones reducen de 5 a 2 las consultas de serialización del portafolio
 medido y de 6 a 4 las del selector del dashboard, conservando respuestas iguales.
@@ -295,7 +300,7 @@ con POST/PUT. Incluye nombres reservados por portafolios eliminados; al editar
 consulta al propietario real y verifica permisos. Devuelve 200 con
 `{nombre, disponible}` para nombres válidos, incluso ocupados. La restricción al
 guardar resuelve colisiones posteriores. [Contrato frontend](API.md#validación-asíncrona-del-nombre).
-La integración del formulario Angular sigue pendiente.
+El formulario Angular ya integra la validación asíncrona al crear y editar.
 
 Conservar migraciones aplicadas y la base principal. Las notas de construcción
 por módulos se mantienen como [historial](docs/HISTORIAL.md), con estados
@@ -306,8 +311,8 @@ anteriores identificados por fecha.
 [Guía de producción](deployment/README.md): variables, arranque, HTTPS,
 PostgreSQL, health, Docker y plantillas systemd para comandos diarios. El seed
 de entrega se ejecuta explícitamente, no durante cada arranque.
-La URL pública se documentará tras una publicación real; no hay un proveedor
-ni remoto Git configurados en el estado actual del proyecto.
+La URL pública se documentará tras una publicación real. El proveedor elegido
+es Railway; el remoto y las URLs definitivas se registrarán al publicar.
 
 ## ASGI, consultas preparadas y tiempo real
 

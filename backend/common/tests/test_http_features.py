@@ -82,3 +82,12 @@ class HTTPFeaturesTests(TestCase):
             response = self.api.get("/health/")
         self.assertEqual(response.status_code, 503)
         self.assertNotIn("secret", str(response.content))
+
+    @override_settings(SECURE_SSL_REDIRECT=True, ALLOWED_HOSTS=['healthcheck.railway.app'])
+    def test_railway_health_probe_works_over_http_without_disabling_api_https(self):
+        response = self.api.get('/health/', HTTP_HOST='healthcheck.railway.app')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'estado': 'ok'})
+        response = self.api.get('/api/', HTTP_HOST='healthcheck.railway.app')
+        self.assertEqual(response.status_code, 301)
+        self.assertTrue(response['Location'].startswith('https://'))
